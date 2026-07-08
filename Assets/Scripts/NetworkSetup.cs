@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -8,6 +9,7 @@ using Unity.Netcode.Transports.UTP;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Management;
 
 /// <summary>
 /// Connection bootstrap for the offline two-device presentation.
@@ -89,15 +91,45 @@ public class NetworkSetup : MonoBehaviour
         Application.runInBackground = true;
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
+        // Headset vs presenter is decided at runtime, so ONE Android APK serves both
+        // devices: on the Quest the OpenXR loader initializes (XR active => customer
+        // headset/client); on an ordinary Android phone or tablet it cannot, so the same
+        // build boots as the salesman host. Editor and desktop builds are always the host.
+        isQuestClient = IsXrHeadsetDevice();
+    }
+
+    /// <summary>
+    /// True only on an Android device where an XR loader actually initialized (a headset).
+    /// Phones/tablets, desktop builds, and the editor all return false.
+    /// </summary>
+    public static bool IsXrHeadsetDevice()
+    {
 #if UNITY_ANDROID && !UNITY_EDITOR
-        // Android device build == Meta Quest 3 client.
-        // (If you ever ship the salesman app on an Android tablet, add an IS_SALESMAN_TABLET
-        //  scripting define to that build profile and branch on it here.)
-        isQuestClient = true;
+        XRGeneralSettings settings = XRGeneralSettings.Instance;
+        return settings != null && settings.Manager != null && settings.Manager.activeLoader != null;
 #else
-        // Editor / Windows / macOS == salesman host.
-        isQuestClient = false;
+        return false;
 #endif
+    }
+
+    /// <summary>
+    /// Yaw-only recenter: rotates the XR rig so whatever direction the customer is
+    /// currently facing becomes world +Z — the panorama's "front", where the floating
+    /// labels and the floor plan board are placed. Without this, the headset's arbitrary
+    /// starting orientation routinely puts all world-anchored content behind the customer.
+    /// </summary>
+    private IEnumerator AlignHeadsetYaw()
+    {
+        // Give head tracking a moment to deliver real poses before sampling.
+        yield return new WaitForSecondsRealtime(0.75f);
+
+        if (!isQuestClient || xrOrigin == null) yield break;
+
+        Camera headCamera = Camera.main;
+        if (headCamera == null) yield break;
+
+        float yaw = headCamera.transform.rotation.eulerAngles.y;
+        xrOrigin.transform.Rotate(0f, -yaw, 0f, Space.World);
     }
 
     private void Start()
@@ -192,6 +224,7 @@ public class NetworkSetup : MonoBehaviour
         {
             SetStatus(autoConnectOnQuest ? "Searching for presenter…" : "Enter presenter IP to connect");
             if (autoConnectOnQuest) StartClientDiscovery();
+            StartCoroutine(AlignHeadsetYaw());
         }
         else
         {
@@ -288,6 +321,8 @@ public class NetworkSetup : MonoBehaviour
             SetStatus("Connected!");
             // Hide the connect panel for a clean, UI-free customer experience.
             if (questConnectPanel != null) questConnectPanel.SetActive(false);
+            // Re-align so the presentation "front" matches wherever the customer now faces.
+            StartCoroutine(AlignHeadsetYaw());
         }
     }
 

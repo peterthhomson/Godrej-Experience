@@ -234,6 +234,9 @@ namespace Godrej.Editor
             // ---- floating labels ----------------------------------------------
             GameObject labelsRoot = BuildFloatingLabels(panoramas, out GameObject[] labelGroups);
 
+            // ---- VR floor plan board (floats near the customer's legs) ---------
+            BuildFloorPlanBoard();
+
             // ---- event system --------------------------------------------------
             // XRUIInputModule (XRI) instead of InputSystemUIInputModule: it ships built-in
             // mouse/touch pointer actions that need no asset wiring (survives scene reloads,
@@ -309,6 +312,8 @@ namespace Godrej.Editor
                 $"Presentation scene generated with {panoramas.Length} room(s).\n\n" +
                 "• Press Play in the editor and click Start Host to test the salesman side.\n" +
                 "• Build the SAME scene for Android to deploy on the Quest 3.\n" +
+                "• The same APK also works on an Android phone — it auto-detects: " +
+                "headset = customer viewer, phone = salesman presenter.\n" +
                 "• The Quest finds the host automatically over the local network.\n\n" +
                 "IMPORTANT: if the app is already installed on the Quest, you MUST rebuild and " +
                 "reinstall it now (Build And Run). Regenerating the scene changes internal network " +
@@ -414,37 +419,33 @@ namespace Godrej.Editor
             AddFixedWidth(right.gameObject, 90f);
         }
 
-        // ---- ZONE 2: VR VIEWPORT (4:3) --------------------------------------
+        // ---- ZONE 2: VR VIEWPORT (16:9, edge-to-edge) ------------------------
         private static RawImage BuildViewport(Transform parent)
         {
-            Image container = CreatePanel(parent, "Zone 2 - VR Viewport", ColPanel);
-            AddFlexibleZone(container.gameObject, 1.05f); // slightly taller than the grid
+            Image container = CreatePanel(parent, "Zone 2 - VR Viewport", ColCard);
+            // No LayoutElement: this fitter reports height = width * 9/16 to the parent
+            // VerticalLayoutGroup, so the zone is exactly as tall as a full-width 16:9
+            // view needs — no letterboxing, no dead panel space, at any resolution.
+            container.gameObject.AddComponent<ViewportHeightFitter>().heightPerWidth = 9f / 16f;
 
-            // Caption pinned to the top; free of the aspect fit below it.
-            TextMeshProUGUI caption = CreateText(container.transform, "Caption", "LIVE · CUSTOMER VIEW",
-                22f, ColTextMuted, TextAlignmentOptions.Center);
+            // The live view fills the whole zone edge-to-edge (RT is 16:9 to match).
+            var viewGO = new GameObject("VR View (16:9)", typeof(RectTransform));
+            viewGO.transform.SetParent(container.transform, false);
+            Stretch((RectTransform)viewGO.transform, Vector2.zero, Vector2.one);
+            var view = viewGO.AddComponent<RawImage>();
+            view.color = Color.black; // becomes the live RenderTexture at runtime
+
+            // Caption overlays the video like a broadcast badge instead of using up a row.
+            TextMeshProUGUI caption = CreateText(viewGO.transform, "Caption", "LIVE · CUSTOMER VIEW",
+                20f, ColTextMuted, TextAlignmentOptions.Top);
             var capRect = caption.rectTransform;
             capRect.anchorMin = new Vector2(0f, 1f);
             capRect.anchorMax = new Vector2(1f, 1f);
             capRect.pivot = new Vector2(0.5f, 1f);
-            capRect.sizeDelta = new Vector2(0f, 44f);
-            capRect.anchoredPosition = new Vector2(0f, -10f);
+            capRect.sizeDelta = new Vector2(0f, 34f);
+            capRect.anchoredPosition = new Vector2(0f, -8f);
 
-            // 4:3 VR view — centred, shrinks to fit whatever height the zone receives.
-            var viewGO = new GameObject("VR View (4:3)", typeof(RectTransform));
-            viewGO.transform.SetParent(container.transform, false);
-            var viewRect = (RectTransform)viewGO.transform;
-            viewRect.anchorMin = new Vector2(0.5f, 0.5f);
-            viewRect.anchorMax = new Vector2(0.5f, 0.5f);
-            viewRect.pivot = new Vector2(0.5f, 0.5f);
-            viewRect.anchoredPosition = new Vector2(0f, -22f); // clear the caption
-            var view = viewGO.AddComponent<RawImage>();
-            view.color = Color.black; // becomes the live RenderTexture at runtime
-            var fitter = viewGO.AddComponent<AspectRatioFitter>();
-            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-            fitter.aspectRatio = 4f / 3f;
-
-            // Reticle: dead-centre gaze indicator, exempt from the aspect fit's layout.
+            // Reticle: dead-centre gaze indicator.
             Image reticle = CreateIcon(viewGO.transform, "Reticle", "UI/Skin/Knob.psd",
                 new Color(1f, 1f, 1f, 0.85f));
             var reticleRect = reticle.rectTransform;
@@ -457,49 +458,26 @@ namespace Godrej.Editor
             return view;
         }
 
-        // ---- ZONE 3: ROOM GRID ----------------------------------------------
+        // ---- ZONE 3: ROOM GRID (always-square buttons) ------------------------
         private static void BuildRoomGrid(Transform parent, Material[] panoramas, List<Button> roomButtons)
         {
             Image gridPanel = CreatePanel(parent, "Zone 3 - Room Grid", ColPanel);
             AddFlexibleZone(gridPanel.gameObject, 1f);
 
-            var rows = gridPanel.gameObject.AddComponent<VerticalLayoutGroup>();
-            rows.padding = new RectOffset(18, 18, 18, 18);
-            rows.spacing = 14f;
-            rows.childControlWidth = true;
-            rows.childControlHeight = true;
-            rows.childForceExpandWidth = true;
-            rows.childForceExpandHeight = true;
+            // GridLayoutGroup + SquareGridFitter: the fitter recomputes a square cell size
+            // whenever the panel resizes, so buttons never stretch on any screen/aspect.
+            var grid = gridPanel.gameObject.AddComponent<GridLayoutGroup>();
+            grid.padding = new RectOffset(18, 18, 18, 18);
+            grid.spacing = new Vector2(14f, 14f);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = 4;
+            grid.childAlignment = TextAnchor.MiddleCenter;
+            gridPanel.gameObject.AddComponent<SquareGridFitter>();
 
-            const int columns = 4;
-            int count = panoramas.Length;
-            int rowCount = Mathf.Max(1, Mathf.CeilToInt(count / (float)columns));
-
-            for (int r = 0; r < rowCount; r++)
+            for (int i = 0; i < panoramas.Length; i++)
             {
-                var rowGO = new GameObject($"Row {r + 1}", typeof(RectTransform));
-                rowGO.transform.SetParent(gridPanel.transform, false);
-                var rowHlg = rowGO.AddComponent<HorizontalLayoutGroup>();
-                rowHlg.spacing = 14f;
-                rowHlg.childControlWidth = true;
-                rowHlg.childControlHeight = true;
-                rowHlg.childForceExpandWidth = true;
-                rowHlg.childForceExpandHeight = true;
-
-                for (int c = 0; c < columns; c++)
-                {
-                    int index = r * columns + c;
-                    if (index < count)
-                    {
-                        string label = panoramas[index] != null ? panoramas[index].name : $"Room {index + 1}";
-                        roomButtons.Add(CreateRoomButton(rowGO.transform, $"Room {index:00}", label));
-                    }
-                    else
-                    {
-                        // Invisible flexible spacer keeps the last row's real buttons column-aligned.
-                        CreateGridSpacer(rowGO.transform, $"Spacer {index:00}");
-                    }
-                }
+                string label = panoramas[i] != null ? panoramas[i].name : $"Room {i + 1}";
+                roomButtons.Add(CreateRoomButton(gridPanel.transform, $"Room {i:00}", label));
             }
         }
 
@@ -526,11 +504,11 @@ namespace Godrej.Editor
         }
 
         // ---- room button: rounded square, icon over label -------------------
+        // Sized by the parent GridLayoutGroup (kept square by SquareGridFitter).
         private static Button CreateRoomButton(Transform parent, string name, string label)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            AddFlexibleWidth(go, 1f); // equal share of the row => uniform columns
 
             var image = go.AddComponent<Image>();
             image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"); // rounded corners
@@ -572,13 +550,6 @@ namespace Godrej.Editor
             textLE.flexibleHeight = 0f;
 
             return button;
-        }
-
-        private static void CreateGridSpacer(Transform parent, string name)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            AddFlexibleWidth(go, 1f); // takes a column's width, draws nothing (no Image)
         }
 
         // ---- dock cell: rounded bg + centred icon-over-label ----------------
@@ -886,6 +857,47 @@ namespace Godrej.Editor
             xrOrigin.CameraYOffset = 1.4f;
 
             return originGO;
+        }
+
+        /// <summary>
+        /// World-space board showing the VR proposal floor plan, floating at leg height
+        /// half a metre in front of the customer, ~45 cm wide, tilted up toward the eyes.
+        /// Thanks to the yaw recenter at session start, "in front" is wherever the customer
+        /// is facing when the experience begins. Select it in the Hierarchy to reposition.
+        /// </summary>
+        private static void BuildFloorPlanBoard()
+        {
+            Texture2D plan = LoadFloorPlanTexture();
+            if (plan == null)
+            {
+                Debug.LogWarning("[SceneSetupWizard] No floor plan texture found — skipping the VR floor plan board.");
+                return;
+            }
+
+            var canvasGO = new GameObject("Floor Plan Board (VR)");
+            var canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+
+            var rect = (RectTransform)canvasGO.transform;
+            float heightPerWidth = (float)plan.height / plan.width;
+            rect.sizeDelta = new Vector2(450f, 450f * heightPerWidth);
+            rect.localScale = Vector3.one * 0.001f; // 450 px canvas => 0.45 m wide board
+
+            Vector3 boardPosition = new Vector3(0f, 0.70f, 0.50f);  // leg height, half a metre ahead
+            Vector3 eyePosition = new Vector3(0f, 1.50f, 0f);       // approximate standing eye level
+            rect.position = boardPosition;
+            rect.rotation = Quaternion.LookRotation(boardPosition - eyePosition); // face the viewer
+
+            // Thin dark frame extending slightly past the plan for contrast against bright rooms.
+            Image frame = CreatePanel(canvas.transform, "Frame", ColCard);
+            Stretch(frame.rectTransform, Vector2.zero, Vector2.one, new Vector4(-10f, -10f, -10f, -10f));
+
+            var imageGO = new GameObject("Plan Image", typeof(RectTransform));
+            imageGO.transform.SetParent(canvas.transform, false);
+            Stretch((RectTransform)imageGO.transform, Vector2.zero, Vector2.one);
+            var planImage = imageGO.AddComponent<RawImage>();
+            planImage.texture = plan;
+            planImage.raycastTarget = false;
         }
 
         private static GameObject BuildFloatingLabels(Material[] panoramas, out GameObject[] labelGroups)

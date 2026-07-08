@@ -44,8 +44,8 @@ public class LocalExperienceManager : NetworkBehaviour
     [Range(30f, 110f)]
     [SerializeField] private float previewFieldOfView = 65f;
 
-    [Tooltip("Preview RenderTexture size. Keep 4:3 to match the viewport's AspectRatioFitter, or the image distorts.")]
-    [SerializeField] private Vector2Int previewResolution = new Vector2Int(1024, 768);
+    [Tooltip("Preview RenderTexture size. Keep 16:9 to match the salesman viewport, or the image distorts.")]
+    [SerializeField] private Vector2Int previewResolution = new Vector2Int(1280, 720);
 
     [Tooltip("How quickly the preview camera catches up to the received head rotation (1/s). 0 = snap instantly (shows network stepping).")]
     [Range(0f, 30f)]
@@ -105,11 +105,14 @@ public class LocalExperienceManager : NetworkBehaviour
         ApplyPanorama(localPanoramaIndex);
         ApplyLabels(localLabelsEnabled);
 
-#if !UNITY_ANDROID || UNITY_EDITOR
-        // Salesman device: bring the preview up immediately so rooms can be previewed
-        // even before Start Host is pressed. Never runs on the Quest build.
-        EnsurePreviewTexture();
-#endif
+        // Salesman device (desktop, editor, or Android phone): bring the preview up
+        // immediately so rooms can be previewed before Start Host is pressed.
+        // Never runs on the headset (runtime XR check, not a compile-time platform check,
+        // because the same Android APK serves both the phone host and the Quest client).
+        if (!NetworkSetup.IsXrHeadsetDevice())
+        {
+            EnsurePreviewTexture();
+        }
     }
 
     public override void OnNetworkSpawn()
