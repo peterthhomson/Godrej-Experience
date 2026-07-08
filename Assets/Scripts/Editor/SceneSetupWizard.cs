@@ -12,7 +12,6 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -236,12 +235,17 @@ namespace Godrej.Editor
             GameObject labelsRoot = BuildFloatingLabels(panoramas, out GameObject[] labelGroups);
 
             // ---- event system --------------------------------------------------
+            // XRUIInputModule (XRI) instead of InputSystemUIInputModule: it ships built-in
+            // mouse/touch pointer actions that need no asset wiring (survives scene reloads,
+            // unlike AssignDefaultActions' transient references), and it is the module XRI
+            // ray interactors require for clicking world-space UI on the Quest.
             var eventSystemGO = new GameObject("EventSystem");
             eventSystemGO.AddComponent<EventSystem>();
-            var uiInputModule = eventSystemGO.AddComponent<InputSystemUIInputModule>();
-            // AddComponent leaves Point/Click/etc. unbound — without this call every button
-            // in the scene (mouse AND XR ray interactors) silently ignores all input.
-            uiInputModule.AssignDefaultActions();
+            var uiInputModule = eventSystemGO.AddComponent<XRUIInputModule>();
+            uiInputModule.enableBuiltinActionsAsFallback = true;
+            uiInputModule.enableXRInput = true;
+            uiInputModule.enableMouseInput = true;
+            uiInputModule.enableTouchInput = true;
 
             // ---- XR interaction manager -----------------------------------------
             // Required by the ray interactors on the XR rig for their UI-click plumbing
@@ -289,15 +293,26 @@ namespace Godrej.Editor
             EnsureFolder("Assets/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
             RegisterSceneInBuildSettings();
-            PlayerSettings.Android.forceInternetPermission = true;        // sockets need it on Quest
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait; // salesman UI is portrait-first
+            PlayerSettings.Android.forceInternetPermission = true; // sockets need it on Quest
+
+            // Project-wide orientation MUST stay Landscape Left: Meta Quest's OpenXR build
+            // validation hard-rejects Portrait/AutoRotation and fails the Android build before
+            // Gradle even runs (easy to break by accident — Player Settings has a plain
+            // "Portrait" checkbox that looks like it only affects 2D platforms, but it doesn't).
+            // The salesman UI is portrait-first regardless: NetworkSetup forces
+            // Screen.orientation = Portrait at runtime on host devices, which works
+            // independently of this build-time default and only applies on non-Quest builds.
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
 
             Selection.activeGameObject = experienceGO;
             EditorUtility.DisplayDialog("Godrej Setup",
                 $"Presentation scene generated with {panoramas.Length} room(s).\n\n" +
                 "• Press Play in the editor and click Start Host to test the salesman side.\n" +
                 "• Build the SAME scene for Android to deploy on the Quest 3.\n" +
-                "• The Quest finds the host automatically over the local network.", "OK");
+                "• The Quest finds the host automatically over the local network.\n\n" +
+                "IMPORTANT: if the app is already installed on the Quest, you MUST rebuild and " +
+                "reinstall it now (Build And Run). Regenerating the scene changes internal network " +
+                "IDs, so an old headset build will connect and instantly disconnect in a loop.", "OK");
         }
 
         // =====================================================================
@@ -503,10 +518,10 @@ namespace Godrej.Editor
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            // Four evenly-distributed slots (mirrors the requested Home / VR Status / Alerts / Map dock).
+            // Four slots: one action button, two captioned read-only displays, one toggle.
             startHostButton = CreateDockButton(dock.transform, "Start Host", "START HOST", accent: true);
-            statusText = CreateDockDisplay(dock.transform, "VR Status", "Ready");
-            ipText = CreateDockDisplay(dock.transform, "Host IP", "—");
+            statusText = CreateDockDisplay(dock.transform, "VR Status", "STATUS", "Ready", 1.7f);
+            ipText = CreateDockDisplay(dock.transform, "Host IP", "HOST IP", "—", 1f);
             labelsToggle = CreateDockToggle(dock.transform, "Labels", "LABELS");
         }
 
@@ -620,10 +635,42 @@ namespace Godrej.Editor
             return button;
         }
 
-        private static TextMeshProUGUI CreateDockDisplay(Transform parent, string name, string value)
+        /// <summary>
+        /// Read-only dock readout: small muted caption over a live value. Deliberately has
+        /// NO background chip or icon so it cannot be mistaken for a pressable button.
+        /// </summary>
+        private static TextMeshProUGUI CreateDockDisplay(Transform parent, string name, string caption,
+            string value, float widthWeight)
         {
-            CreateDockCell(parent, name, value, ColButton, ColTextMuted, ColText, out TextMeshProUGUI labelText, out _);
-            return labelText; // live status / IP writes into this label
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            AddFlexibleWidth(go, widthWeight);
+
+            var stack = go.AddComponent<VerticalLayoutGroup>();
+            stack.padding = new RectOffset(6, 6, 12, 12);
+            stack.spacing = 4f;
+            stack.childControlWidth = true;
+            stack.childControlHeight = true;
+            stack.childForceExpandWidth = true;
+            stack.childForceExpandHeight = false;
+            stack.childAlignment = TextAnchor.MiddleCenter;
+
+            TextMeshProUGUI captionText = CreateText(go.transform, "Caption", caption, 14f, ColTextMuted,
+                TextAlignmentOptions.Center);
+            var capLE = captionText.gameObject.AddComponent<LayoutElement>();
+            capLE.preferredHeight = 22f;
+            capLE.flexibleHeight = 0f;
+
+            TextMeshProUGUI valueText = CreateText(go.transform, "Value", value, 20f, ColText,
+                TextAlignmentOptions.Center);
+            valueText.enableAutoSizing = true;   // long status strings shrink to fit
+            valueText.fontSizeMax = 20f;
+            valueText.fontSizeMin = 9f;
+            valueText.textWrappingMode = TextWrappingModes.Normal;
+            var valLE = valueText.gameObject.AddComponent<LayoutElement>();
+            valLE.flexibleHeight = 1f;
+
+            return valueText; // live status / IP writes into this label
         }
 
         private static Toggle CreateDockToggle(Transform parent, string name, string label)

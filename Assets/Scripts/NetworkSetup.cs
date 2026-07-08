@@ -73,6 +73,13 @@ public class NetworkSetup : MonoBehaviour
     private const string ProbeMessage = "GODREJ_XR_PROBE_V1";
     private const string ReplyMessage = "GODREJ_XR_HOST_V1";
 
+    // Connect→drop flap detection: a connection that dies faster than this window is
+    // almost always a build mismatch (headset APK built from an older scene — Netcode's
+    // in-scene object hashes change on every scene regeneration, so sync fails client-side).
+    private const float RapidDropWindowSeconds = 12f;
+    private float lastConnectTime = float.NegativeInfinity;
+    private int rapidDropCount;
+
     // ---------------------------------------------------------------- lifecycle
 
     private void Awake()
@@ -188,6 +195,11 @@ public class NetworkSetup : MonoBehaviour
         }
         else
         {
+            // Portrait-first presenter UI. No-op on desktop; locks rotation when the
+            // salesman app runs on an Android/iOS tablet or phone. Kept out of
+            // PlayerSettings because those are shared with the Quest APK build.
+            Screen.orientation = ScreenOrientation.Portrait;
+
             SetStatus("Ready — press Start Host");
             if (ipDisplayText != null) ipDisplayText.text = $"This device: {GetLocalIPv4()}";
         }
@@ -266,11 +278,13 @@ public class NetworkSetup : MonoBehaviour
         {
             if (clientId != NetworkManager.Singleton.LocalClientId)
             {
+                lastConnectTime = Time.unscaledTime;
                 SetStatus("Headset connected — presentation live");
             }
         }
         else
         {
+            lastConnectTime = Time.unscaledTime;
             SetStatus("Connected!");
             // Hide the connect panel for a clean, UI-free customer experience.
             if (questConnectPanel != null) questConnectPanel.SetActive(false);
@@ -283,17 +297,46 @@ public class NetworkSetup : MonoBehaviour
         {
             if (clientId != NetworkManager.Singleton.LocalClientId)
             {
-                SetStatus("Headset disconnected — waiting for reconnect…");
+                SetStatus(RegisterDrop()
+                    ? "Headset app OUTDATED — reinstall via Build And Run"
+                    : "Headset disconnected — waiting…");
             }
             return;
         }
 
         // Quest side: connection lost or the connect attempt timed out.
         sessionStarted = false;
-        SetStatus("Disconnected — searching for presenter…");
+        bool flapping = RegisterDrop();
+        SetStatus(flapping
+            ? "App outdated — ask the presenter to rebuild and reinstall it"
+            : "Disconnected — searching for presenter…");
         if (questConnectPanel != null) questConnectPanel.SetActive(true);
         if (connectButton != null) connectButton.interactable = true;
-        if (autoConnectOnQuest && isQuestClient) StartClientDiscovery();
+        if (autoConnectOnQuest && isQuestClient)
+        {
+            StartClientDiscovery();
+            // Back off when flapping so we don't hammer the host with doomed reconnects
+            // (auto-retry continues — a rebuilt host scene could also fix the mismatch).
+            if (flapping) nextProbeTime = Time.unscaledTime + 15f;
+        }
+    }
+
+    /// <summary>
+    /// Records a disconnect and reports whether we're in a rapid connect→drop loop
+    /// (two or more connections in a row that died within seconds of connecting).
+    /// </summary>
+    private bool RegisterDrop()
+    {
+        if (Time.unscaledTime - lastConnectTime < RapidDropWindowSeconds)
+        {
+            rapidDropCount++;
+        }
+        else
+        {
+            rapidDropCount = 0; // the connection lived a while — a normal drop
+        }
+
+        return rapidDropCount >= 2;
     }
 
     private void OnTransportFailure()

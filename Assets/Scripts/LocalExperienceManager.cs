@@ -285,6 +285,7 @@ public class LocalExperienceManager : NetworkBehaviour
         // Both the Quest XR camera and the host preview camera clear with the skybox,
         // so a single material swap updates every viewpoint at once.
         RenderSettings.skybox = material;
+        Debug.Log($"[LocalExperienceManager] Panorama {index} applied: {material.name}");
 
         if (updateEnvironmentLighting)
         {
