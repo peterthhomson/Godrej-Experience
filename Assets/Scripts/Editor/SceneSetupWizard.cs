@@ -926,6 +926,84 @@ namespace Godrej.Editor
                 "All rows now scale to fit. Save the scene (Ctrl+S), then rebuild the affected APK(s).", "OK");
         }
 
+        /// <summary>
+        /// Adds live status colors to the dock (red/green/yellow headset knob on START
+        /// HOST with reconnect behavior, green/red knobs on the LABELS and PLAN toggles).
+        /// Finds the existing controls by name and wires a DockStatusIndicator — nothing
+        /// else in the layout is touched. Safe to run repeatedly.
+        /// </summary>
+        [MenuItem("Godrej/8. Add Dock Status Colors (keeps your layout)", priority = 6)]
+        public static void AddDockStatusColors()
+        {
+            var setup = Object.FindFirstObjectByType<NetworkSetup>(FindObjectsInactive.Include);
+            if (setup == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup", "No NetworkSetup found in the open scene.", "OK");
+                return;
+            }
+
+            Button startHost = FindNamedComponent<Button>("Start Host");
+            Toggle labels = FindNamedComponent<Toggle>("Labels");
+            Toggle plan = FindNamedComponent<Toggle>("Plan Toggle");
+
+            if (startHost == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup",
+                    "Could not find the 'Start Host' button in the open scene (was it renamed?).", "OK");
+                return;
+            }
+
+            GameObject dockGO = startHost.transform.parent != null
+                ? startHost.transform.parent.gameObject
+                : startHost.gameObject;
+
+            var indicator = dockGO.GetComponent<DockStatusIndicator>();
+            if (indicator == null) indicator = dockGO.AddComponent<DockStatusIndicator>();
+
+            var so = new SerializedObject(indicator);
+            SetRef(so, "networkSetup", setup);
+            SetRef(so, "startHostButton", startHost);
+            SetRef(so, "startHostIcon", FindChildComponent<Image>(startHost.transform, "Icon"));
+            SetRef(so, "startHostLabel", FindChildComponent<TextMeshProUGUI>(startHost.transform, "Label"));
+            if (labels != null)
+            {
+                SetRef(so, "labelsToggle", labels);
+                SetRef(so, "labelsIcon", FindChildComponent<Image>(labels.transform, "Icon"));
+            }
+            if (plan != null)
+            {
+                SetRef(so, "planToggle", plan);
+                SetRef(so, "planIcon", FindChildComponent<Image>(plan.transform, "Icon"));
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorUtility.DisplayDialog("Godrej Setup",
+                "Dock status colors wired:\n" +
+                "• START HOST knob — red: no headset, green: connected, yellow: lost (press to reconnect)\n" +
+                "• LABELS / PLAN knobs — green: on, red: off\n" +
+                (labels == null || plan == null ? "\nNote: some toggles were not found by name and were skipped.\n" : "") +
+                "\nSave the scene (Ctrl+S), then rebuild the PHONE APK (menu 5).", "OK");
+        }
+
+        private static T FindNamedComponent<T>(string gameObjectName) where T : Component
+        {
+            foreach (T candidate in Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (candidate.gameObject.name == gameObjectName) return candidate;
+            }
+            return null;
+        }
+
+        private static T FindChildComponent<T>(Transform parent, string childName) where T : Component
+        {
+            foreach (T candidate in parent.GetComponentsInChildren<T>(true))
+            {
+                if (candidate.gameObject.name == childName) return candidate;
+            }
+            return null;
+        }
+
         // =====================================================================
         //  DEVICE-SPECIFIC BUILDS
         //  The Quest build is XR-first: the OpenXR loader injects a pre-init hook and an
