@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -9,6 +10,7 @@ using Unity.Netcode.Transports.UTP;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR;
 using UnityEngine.XR.Management;
 
 /// <summary>
@@ -82,6 +84,11 @@ public class NetworkSetup : MonoBehaviour
     private float lastConnectTime = float.NegativeInfinity;
     private int rapidDropCount;
 
+    // Presentation eye level: content (labels, plan board) is authored against this height,
+    // and the recenter pins the customer's eyes to it regardless of tracking-space quirks.
+    private const float TargetEyeHeight = 1.6f;
+    private static readonly List<XRInputSubsystem> InputSubsystems = new List<XRInputSubsystem>();
+
     // ---------------------------------------------------------------- lifecycle
 
     private void Awake()
@@ -113,12 +120,15 @@ public class NetworkSetup : MonoBehaviour
     }
 
     /// <summary>
-    /// Yaw-only recenter: rotates the XR rig so whatever direction the customer is
-    /// currently facing becomes world +Z — the panorama's "front", where the floating
-    /// labels and the floor plan board are placed. Without this, the headset's arbitrary
-    /// starting orientation routinely puts all world-anchored content behind the customer.
+    /// Recenters the customer onto the panorama centre: rotates the XR rig so their
+    /// current gaze direction becomes world +Z (where the labels and floor plan board
+    /// live), then slides the rig so their head sits exactly on the world origin.
+    /// Floor-based tracking maps the headset to its physical position in the room, so
+    /// without the position step a customer standing away from their play-space centre
+    /// is metres away from all the world-anchored content (board looks tiny/misplaced,
+    /// labels off to the side). Height is left untouched — real eye height is correct.
     /// </summary>
-    private IEnumerator AlignHeadsetYaw()
+    private IEnumerator RecenterHeadset()
     {
         // Give head tracking a moment to deliver real poses before sampling.
         yield return new WaitForSecondsRealtime(0.75f);
@@ -128,8 +138,68 @@ public class NetworkSetup : MonoBehaviour
         Camera headCamera = Camera.main;
         if (headCamera == null) yield break;
 
+        // 1) Yaw: current facing direction becomes the panorama front (+Z).
         float yaw = headCamera.transform.rotation.eulerAngles.y;
         xrOrigin.transform.Rotate(0f, -yaw, 0f, Space.World);
+
+        // 2) Position: after the rotation settles the camera's world offset, pull the
+        //    rig back so the head lands on the origin (XZ).
+        Vector3 head = headCamera.transform.position;
+        xrOrigin.transform.position -= new Vector3(head.x, 0f, head.z);
+
+        // 3) Height: pin the eyes to presentation eye level. Makes the experience immune
+        //    to tracking-space differences (floor vs local) — booting before the Guardian
+        //    is ready otherwise leaves the customer's eyes near floor level.
+        xrOrigin.transform.position += new Vector3(0f, TargetEyeHeight - head.y, 0f);
+
+        Debug.Log($"[NetworkSetup] Headset recentered (yaw {yaw:F0}°, offset {head.x:F2},{head.z:F2}, eye {head.y:F2}→{TargetEyeHeight}).");
+    }
+
+    /// <summary>
+    /// The XRI Starter rig ships with a full locomotion stack (gravity, stick move, snap
+    /// turn, teleport, climb). The customer only looks around — and in a panorama scene
+    /// with no floor collider, GravityProvider makes the rig FREE-FALL from app start
+    /// (labels and the plan board appear to shoot upward). Disable the entire stack.
+    /// </summary>
+    private void DisableLocomotion()
+    {
+        if (xrOrigin == null) return;
+
+        foreach (Transform child in xrOrigin.GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name == "Locomotion")
+            {
+                child.gameObject.SetActive(false);
+                Debug.Log("[NetworkSetup] Locomotion stack disabled (gravity/move/turn/teleport).");
+                return;
+            }
+        }
+
+        Debug.LogWarning("[NetworkSetup] No 'Locomotion' object found under the XR rig — if the view falls or drifts, disable its locomotion providers manually.");
+    }
+
+    /// <summary>Re-anchor whenever the runtime moves the tracking space (system recenter, Guardian re-localization, headset re-worn).</summary>
+    private void SubscribeTrackingOriginChanges()
+    {
+        SubsystemManager.GetSubsystems(InputSubsystems);
+        foreach (XRInputSubsystem subsystem in InputSubsystems)
+        {
+            subsystem.trackingOriginUpdated += OnTrackingOriginUpdated;
+        }
+    }
+
+    private void UnsubscribeTrackingOriginChanges()
+    {
+        foreach (XRInputSubsystem subsystem in InputSubsystems)
+        {
+            if (subsystem != null) subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+        }
+        InputSubsystems.Clear();
+    }
+
+    private void OnTrackingOriginUpdated(XRInputSubsystem subsystem)
+    {
+        if (isQuestClient && isActiveAndEnabled) StartCoroutine(RecenterHeadset());
     }
 
     private void Start()
@@ -180,6 +250,7 @@ public class NetworkSetup : MonoBehaviour
         if (startHostButton != null) startHostButton.onClick.RemoveListener(StartHost);
         if (connectButton != null) connectButton.onClick.RemoveListener(ConnectManually);
 
+        UnsubscribeTrackingOriginChanges();
         StopDiscovery();
     }
 
@@ -224,7 +295,9 @@ public class NetworkSetup : MonoBehaviour
         {
             SetStatus(autoConnectOnQuest ? "Searching for presenter…" : "Enter presenter IP to connect");
             if (autoConnectOnQuest) StartClientDiscovery();
-            StartCoroutine(AlignHeadsetYaw());
+            DisableLocomotion();               // stop gravity free-fall & stick movement
+            SubscribeTrackingOriginChanges();  // re-anchor after Guardian/system recenters
+            StartCoroutine(RecenterHeadset());
         }
         else
         {
@@ -322,7 +395,7 @@ public class NetworkSetup : MonoBehaviour
             // Hide the connect panel for a clean, UI-free customer experience.
             if (questConnectPanel != null) questConnectPanel.SetActive(false);
             // Re-align so the presentation "front" matches wherever the customer now faces.
-            StartCoroutine(AlignHeadsetYaw());
+            StartCoroutine(RecenterHeadset());
         }
     }
 

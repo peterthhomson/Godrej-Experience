@@ -378,7 +378,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6c36843bac48b29469f79baf3c98f9b6, type: 3}
-  m_Name: AndroidXRHandMeshData Standalone
+  m_Name: AndroidXRHandMeshData Android
   m_EditorClassIdentifier: Unity.XR.AndroidOpenXR::UnityEngine.XR.OpenXR.Features.Android.AndroidXRHandMeshData
   m_enabled: 0
   nameUi: 'Android XR: Hand Mesh Data'
@@ -1351,8 +1351,8 @@ MonoBehaviour:
   - {fileID: 4477548388288609069}
   - {fileID: 1346147891836958595}
   - {fileID: 4419153280326951679}
-  - {fileID: 6183569721504476205}
-  - {fileID: -3486019309027973847}
+  - {fileID: 7908285945426404035}
+  - {fileID: 5656922106499042962}
   - {fileID: -5595888725980849771}
   - {fileID: -1750038663748469571}
   - {fileID: 3588802062979407146}
@@ -1363,7 +1363,7 @@ MonoBehaviour:
   - {fileID: -6002248426938650830}
   - {fileID: -8406945805967035521}
   - {fileID: 2722584283277215993}
-  - {fileID: -4184630077180679886}
+  - {fileID: -6637401304884689918}
   - {fileID: 4080643946199402598}
   - {fileID: -4178907294484783398}
   - {fileID: -7762456801408692114}
@@ -1400,7 +1400,7 @@ MonoBehaviour:
   - {fileID: -1889182927500917094}
   - {fileID: 6937338980344429797}
   customLoaderName: 
-  m_renderMode: 1
+  m_renderMode: 0
   m_latencyOptimization: 1
   m_autoColorSubmissionMode: 1
   m_colorSubmissionModes:

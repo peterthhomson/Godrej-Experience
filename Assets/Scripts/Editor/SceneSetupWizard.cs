@@ -171,8 +171,12 @@ namespace Godrej.Editor
                     "Generate Anyway", "Cancel")) return;
             }
 
-            if (File.Exists(ScenePath) && !EditorUtility.DisplayDialog("Godrej Setup",
-                "Assets/Scenes/Presentation.unity already exists.\nOverwrite it?", "Overwrite", "Cancel"))
+            if (File.Exists(ScenePath) && !EditorUtility.DisplayDialog("Godrej Setup — WARNING",
+                "Assets/Scenes/Presentation.unity already exists.\n\n" +
+                "Regenerating REPLACES THE WHOLE SCENE, including any manual changes you made " +
+                "(rearranged salesman canvas, moved labels, repositioned board).\n\n" +
+                "For small updates use the other Godrej menu items instead, or commit the scene " +
+                "to git first so you can recover it.\n\nReplace everything?", "Replace Everything", "Cancel"))
             {
                 return;
             }
@@ -860,9 +864,34 @@ namespace Godrej.Editor
         }
 
         /// <summary>
-        /// World-space board showing the VR proposal floor plan, floating at leg height
-        /// half a metre in front of the customer, ~45 cm wide, tilted up toward the eyes.
-        /// Thanks to the yaw recenter at session start, "in front" is wherever the customer
+        /// Replaces ONLY the VR floor plan board in the currently open scene, leaving the
+        /// rest of the scene (including any hand-arranged salesman canvas) untouched.
+        /// Use this instead of a full scene regeneration once you have customized the layout.
+        /// </summary>
+        [MenuItem("Godrej/3. Update VR Floor Plan Board (keeps your layout)", priority = 3)]
+        public static void UpdateFloorPlanBoard()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root.name == "Floor Plan Board (VR)")
+                {
+                    Object.DestroyImmediate(root);
+                    break;
+                }
+            }
+
+            BuildFloorPlanBoard();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorUtility.DisplayDialog("Godrej Setup",
+                "VR floor plan board updated in the open scene (knee height, tilted toward the viewer).\n\n" +
+                "Save the scene (Ctrl+S), then Build And Run to update the headset.", "OK");
+        }
+
+        /// <summary>
+        /// World-space board showing the VR proposal floor plan: ~45 cm wide, knee height,
+        /// just in front of the customer, horizontal with a gentle tilt toward the eyes.
+        /// Thanks to the recenter at session start, "in front" is wherever the customer
         /// is facing when the experience begins. Select it in the Hierarchy to reposition.
         /// </summary>
         private static void BuildFloorPlanBoard()
@@ -883,10 +912,10 @@ namespace Godrej.Editor
             rect.sizeDelta = new Vector2(450f, 450f * heightPerWidth);
             rect.localScale = Vector3.one * 0.001f; // 450 px canvas => 0.45 m wide board
 
-            Vector3 boardPosition = new Vector3(0f, 0.70f, 0.50f);  // leg height, half a metre ahead
-            Vector3 eyePosition = new Vector3(0f, 1.50f, 0f);       // approximate standing eye level
-            rect.position = boardPosition;
-            rect.rotation = Quaternion.LookRotation(boardPosition - eyePosition); // face the viewer
+            // Horizontal like a plan sheet on an invisible table (90° = perfectly flat),
+            // raised 22° toward the viewer so it reads comfortably when looking down.
+            rect.position = new Vector3(0f, 0.52f, 0.55f); // knee height, just in front
+            rect.rotation = Quaternion.Euler(68f, 0f, 0f);
 
             // Thin dark frame extending slightly past the plan for contrast against bright rooms.
             Image frame = CreatePanel(canvas.transform, "Frame", ColCard);
