@@ -33,6 +33,14 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("Optional: one label group per panorama (same order as materials). Only the group matching the current panorama is shown. Leave empty to show all labels in every room.")]
     [SerializeField] private GameObject[] perPanoramaLabelGroups;
 
+    [Header("Floor Plan Board")]
+    [Tooltip("The world-space plan board shown at the customer's knees. Toggled by the salesman.")]
+    [SerializeField] private GameObject floorPlanBoard;
+
+    [Header("Start View")]
+    [Tooltip("Salesman slider (0–360°) choosing which part of the panorama faces the customer. Values set in the editor persist into the skybox materials, so tuned start views bake into builds.")]
+    [SerializeField] private Slider startViewSlider;
+
     [Header("Salesman Preview (Host only)")]
     [Tooltip("Fixed perspective camera at the panorama centre. Never moves, only rotates.")]
     [SerializeField] private Camera previewCamera;
@@ -71,6 +79,12 @@ public class LocalExperienceManager : NetworkBehaviour
     private readonly NetworkVariable<bool> labelsEnabled = new NetworkVariable<bool>(
         true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private readonly NetworkVariable<bool> boardEnabled = new NetworkVariable<bool>(
+        true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private readonly NetworkVariable<float> startViewYaw = new NetworkVariable<float>(
+        0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     // ---------------------------------------------------------------- runtime state (no per-frame allocations)
 
     private RenderTexture previewTexture;
@@ -82,6 +96,10 @@ public class LocalExperienceManager : NetworkBehaviour
     // State applied while offline (lets the salesman preview rooms before Start Host).
     private int localPanoramaIndex;
     private bool localLabelsEnabled = true;
+    private bool localBoardEnabled = true;
+    private float localStartViewYaw;
+
+    private static readonly int RotationProperty = Shader.PropertyToID("_Rotation");
 
     /// <summary>Number of configured panoramas (for UI generation).</summary>
     public int PanoramaCount => panoramaMaterials != null ? panoramaMaterials.Length : 0;
@@ -101,9 +119,10 @@ public class LocalExperienceManager : NetworkBehaviour
             previewCamera.clearFlags = CameraClearFlags.Skybox;
         }
 
-        // Show the initial panorama and label state even before any network session exists.
+        // Show the initial panorama, label, and board state before any network session exists.
         ApplyPanorama(localPanoramaIndex);
         ApplyLabels(localLabelsEnabled);
+        ApplyBoard(localBoardEnabled);
 
         // Salesman device (desktop, editor, or Android phone): bring the preview up
         // immediately so rooms can be previewed before Start Host is pressed.
@@ -121,6 +140,8 @@ public class LocalExperienceManager : NetworkBehaviour
 
         panoramaIndex.OnValueChanged += OnPanoramaIndexChanged;
         labelsEnabled.OnValueChanged += OnLabelsEnabledChanged;
+        boardEnabled.OnValueChanged += OnBoardEnabledChanged;
+        startViewYaw.OnValueChanged += OnStartViewYawChanged;
 
         if (IsServer)
         {
@@ -128,6 +149,8 @@ public class LocalExperienceManager : NetworkBehaviour
             // late-joining Quest immediately receives the correct state.
             panoramaIndex.Value = localPanoramaIndex;
             labelsEnabled.Value = localLabelsEnabled;
+            boardEnabled.Value = localBoardEnabled;
+            startViewYaw.Value = localStartViewYaw;
 
             EnsurePreviewTexture();
         }
@@ -140,16 +163,22 @@ public class LocalExperienceManager : NetworkBehaviour
         // NetworkVariable initial values do NOT fire OnValueChanged on spawn — apply explicitly.
         ApplyPanorama(panoramaIndex.Value);
         ApplyLabels(labelsEnabled.Value);
+        ApplyBoard(boardEnabled.Value);
+        ApplyStartView(startViewYaw.Value);
     }
 
     public override void OnNetworkDespawn()
     {
         panoramaIndex.OnValueChanged -= OnPanoramaIndexChanged;
         labelsEnabled.OnValueChanged -= OnLabelsEnabledChanged;
+        boardEnabled.OnValueChanged -= OnBoardEnabledChanged;
+        startViewYaw.OnValueChanged -= OnStartViewYawChanged;
 
         // Keep local mirrors in sync so the UI stays coherent after a disconnect.
         localPanoramaIndex = panoramaIndex.Value;
         localLabelsEnabled = labelsEnabled.Value;
+        localBoardEnabled = boardEnabled.Value;
+        localStartViewYaw = startViewYaw.Value;
 
         base.OnNetworkDespawn();
     }
@@ -259,6 +288,45 @@ public class LocalExperienceManager : NetworkBehaviour
         }
     }
 
+    /// <summary>
+    /// Shows/hides the VR floor plan board. Wired to the PLAN toggle on the salesman canvas.
+    /// </summary>
+    public void SetFloorPlanVisible(bool visible)
+    {
+        if (IsSpawned)
+        {
+            if (!IsServer) return;
+            boardEnabled.Value = visible;
+        }
+        else
+        {
+            localBoardEnabled = visible;
+            ApplyBoard(visible);
+        }
+    }
+
+    /// <summary>
+    /// Rotates the panorama so the chosen direction faces the customer's "front" —
+    /// this is what the customer sees first when the experience starts. Wired to the
+    /// START VIEW slider (0–360°). In the editor the value persists into the skybox
+    /// material, so per-room tuned start views carry into the next build.
+    /// </summary>
+    public void SetStartViewRotation(float degrees)
+    {
+        degrees = Mathf.Repeat(degrees, 360f);
+
+        if (IsSpawned)
+        {
+            if (!IsServer) return;
+            startViewYaw.Value = degrees;
+        }
+        else
+        {
+            localStartViewYaw = degrees;
+            ApplyStartView(degrees);
+        }
+    }
+
     /// <summary>Room display name for UI generation (material name).</summary>
     public string GetPanoramaName(int index)
     {
@@ -272,6 +340,10 @@ public class LocalExperienceManager : NetworkBehaviour
     private void OnPanoramaIndexChanged(int previous, int next) => ApplyPanorama(next);
 
     private void OnLabelsEnabledChanged(bool previous, bool next) => ApplyLabels(next);
+
+    private void OnBoardEnabledChanged(bool previous, bool next) => ApplyBoard(next);
+
+    private void OnStartViewYawChanged(float previous, float next) => ApplyStartView(next);
 
     private void ApplyPanorama(int index)
     {
@@ -290,6 +362,16 @@ public class LocalExperienceManager : NetworkBehaviour
         RenderSettings.skybox = material;
         Debug.Log($"[LocalExperienceManager] Panorama {index} applied: {material.name}");
 
+        // Each room remembers its own start-view rotation (stored in the material).
+        // The server pushes it into the synced state; the slider mirrors it silently.
+        if (material.HasProperty(RotationProperty))
+        {
+            float roomYaw = material.GetFloat(RotationProperty);
+            if (IsSpawned && IsServer) startViewYaw.Value = roomYaw;
+            else if (!IsSpawned) localStartViewYaw = roomYaw;
+            if (startViewSlider != null) startViewSlider.SetValueWithoutNotify(roomYaw);
+        }
+
         if (updateEnvironmentLighting)
         {
             DynamicGI.UpdateEnvironment();
@@ -303,6 +385,24 @@ public class LocalExperienceManager : NetworkBehaviour
         if (labelsRoot != null && labelsRoot.activeSelf != visible)
         {
             labelsRoot.SetActive(visible);
+        }
+    }
+
+    private void ApplyBoard(bool visible)
+    {
+        if (floorPlanBoard != null && floorPlanBoard.activeSelf != visible)
+        {
+            floorPlanBoard.SetActive(visible);
+        }
+    }
+
+    /// <summary>Spins the active skybox so the given yaw faces the customer's front.</summary>
+    private void ApplyStartView(float degrees)
+    {
+        Material sky = RenderSettings.skybox;
+        if (sky != null && sky.HasProperty(RotationProperty))
+        {
+            sky.SetFloat(RotationProperty, degrees);
         }
     }
 

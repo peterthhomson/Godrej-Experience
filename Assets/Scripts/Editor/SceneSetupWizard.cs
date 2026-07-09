@@ -239,7 +239,7 @@ namespace Godrej.Editor
             GameObject labelsRoot = BuildFloatingLabels(panoramas, out GameObject[] labelGroups);
 
             // ---- VR floor plan board (floats near the customer's legs) ---------
-            BuildFloorPlanBoard();
+            GameObject floorPlanBoard = BuildFloorPlanBoard();
 
             // ---- event system --------------------------------------------------
             // XRUIInputModule (XRI) instead of InputSystemUIInputModule: it ships built-in
@@ -271,6 +271,8 @@ namespace Godrej.Editor
             SetRef(expSO, "previewCamera", previewCamera);
             SetRef(expSO, "previewImage", ui.previewImage);
             SetRef(expSO, "xrHeadTransform", xrCamera.transform);
+            if (floorPlanBoard != null) SetRef(expSO, "floorPlanBoard", floorPlanBoard);
+            SetRef(expSO, "startViewSlider", ui.startViewSlider);
             expSO.ApplyModifiedPropertiesWithoutUndo();
 
             // ---- wire NetworkSetup ------------------------------------------------
@@ -291,6 +293,8 @@ namespace Godrej.Editor
             UnityEventTools.AddPersistentListener(ui.startHostButton.onClick, new UnityAction(setup.StartHost));
             UnityEventTools.AddPersistentListener(questUi.connectButton.onClick, new UnityAction(setup.ConnectManually));
             UnityEventTools.AddPersistentListener(ui.labelsToggle.onValueChanged, new UnityAction<bool>(experience.SetLabelsVisible));
+            UnityEventTools.AddPersistentListener(ui.planToggle.onValueChanged, new UnityAction<bool>(experience.SetFloorPlanVisible));
+            UnityEventTools.AddPersistentListener(ui.startViewSlider.onValueChanged, new UnityAction<float>(experience.SetStartViewRotation));
             for (int i = 0; i < ui.roomButtons.Count; i++)
             {
                 UnityEventTools.AddIntPersistentListener(ui.roomButtons[i].onClick, experience.SetPanorama, i);
@@ -332,6 +336,8 @@ namespace Godrej.Editor
         {
             public Button startHostButton;
             public Toggle labelsToggle;
+            public Toggle planToggle;
+            public Slider startViewSlider;
             public TextMeshProUGUI statusText;
             public TextMeshProUGUI ipText;
             public RawImage previewImage;
@@ -385,7 +391,8 @@ namespace Godrej.Editor
             ui.previewImage = BuildViewport(safeRect);                 // Zone 2
             BuildRoomGrid(safeRect, panoramas, ui.roomButtons);        // Zone 3
             BuildNavDock(safeRect, out ui.startHostButton,            // Zone 4
-                out ui.labelsToggle, out ui.statusText, out ui.ipText);
+                out ui.labelsToggle, out ui.statusText, out ui.ipText,
+                out ui.planToggle, out ui.startViewSlider);
 
             return ui;
         }
@@ -487,7 +494,8 @@ namespace Godrej.Editor
 
         // ---- ZONE 4: NAV DOCK ------------------------------------------------
         private static void BuildNavDock(Transform parent, out Button startHostButton,
-            out Toggle labelsToggle, out TextMeshProUGUI statusText, out TextMeshProUGUI ipText)
+            out Toggle labelsToggle, out TextMeshProUGUI statusText, out TextMeshProUGUI ipText,
+            out Toggle planToggle, out Slider startViewSlider)
         {
             Image dock = CreatePanel(parent, "Zone 4 - Nav Dock", ColCard);
             AddZoneHeight(dock.gameObject, 140f);
@@ -500,11 +508,12 @@ namespace Godrej.Editor
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            // Four slots: one action button, two captioned read-only displays, one toggle.
             startHostButton = CreateDockButton(dock.transform, "Start Host", "START HOST", accent: true);
             statusText = CreateDockDisplay(dock.transform, "VR Status", "STATUS", "Ready", 1.7f);
             ipText = CreateDockDisplay(dock.transform, "Host IP", "HOST IP", "—", 1f);
             labelsToggle = CreateDockToggle(dock.transform, "Labels", "LABELS");
+            planToggle = CreateDockToggle(dock.transform, "Plan Toggle", "PLAN");
+            startViewSlider = CreateDockSlider(dock.transform, "Start View", "START VIEW");
         }
 
         // ---- room button: rounded square, icon over label -------------------
@@ -864,6 +873,133 @@ namespace Godrej.Editor
         }
 
         /// <summary>
+        /// Adds the PLAN on/off toggle and the START VIEW slider to the existing nav dock,
+        /// fully wired to LocalExperienceManager — WITHOUT touching the rest of the layout.
+        /// Safe to run repeatedly (replaces its own previous controls).
+        /// </summary>
+        [MenuItem("Godrej/4. Add Plan Toggle + Start View Slider (keeps your layout)", priority = 4)]
+        public static void AddPresenterExtras()
+        {
+            var experience = Object.FindFirstObjectByType<LocalExperienceManager>(FindObjectsInactive.Include);
+            if (experience == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup", "No LocalExperienceManager found in the open scene.", "OK");
+                return;
+            }
+
+            Scene scene = SceneManager.GetActiveScene();
+            Transform dock = null;
+            GameObject board = null;
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root.name == "Floor Plan Board (VR)") board = root;
+                foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.name == "Zone 4 - Nav Dock") dock = t;
+                    else if (t.name == "Floor Plan Board (VR)") board = t.gameObject;
+                }
+            }
+
+            if (dock == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup",
+                    "Could not find 'Zone 4 - Nav Dock' in the open scene.\n" +
+                    "Rename your bottom bar back to that, or ask me to target a different container.", "OK");
+                return;
+            }
+
+            // Idempotency: remove previously added copies of these controls.
+            for (int i = dock.childCount - 1; i >= 0; i--)
+            {
+                Transform child = dock.GetChild(i);
+                if (child.name == "Plan Toggle" || child.name == "Start View")
+                {
+                    Object.DestroyImmediate(child.gameObject);
+                }
+            }
+
+            Toggle planToggle = CreateDockToggle(dock, "Plan Toggle", "PLAN");
+            Slider slider = CreateDockSlider(dock, "Start View", "START VIEW");
+
+            var so = new SerializedObject(experience);
+            if (board != null) SetRef(so, "floorPlanBoard", board);
+            SetRef(so, "startViewSlider", slider);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            UnityEventTools.AddPersistentListener(planToggle.onValueChanged,
+                new UnityAction<bool>(experience.SetFloorPlanVisible));
+            UnityEventTools.AddPersistentListener(slider.onValueChanged,
+                new UnityAction<float>(experience.SetStartViewRotation));
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorUtility.DisplayDialog("Godrej Setup",
+                "Added to the dock:\n• PLAN toggle — shows/hides the floor plan board in the headset\n" +
+                "• START VIEW slider — spins the panorama to choose what the customer faces first " +
+                "(per room; values tuned in the editor bake into builds)\n\n" +
+                "Save the scene (Ctrl+S), then Build And Run — the headset app must be rebuilt for these to sync.", "OK");
+        }
+
+        /// <summary>Dock cell containing a caption and a 0–360° slider.</summary>
+        private static Slider CreateDockSlider(Transform parent, string name, string caption)
+        {
+            var cell = new GameObject(name, typeof(RectTransform));
+            cell.transform.SetParent(parent, false);
+            AddFlexibleWidth(cell, 1.4f);
+
+            var stack = cell.AddComponent<VerticalLayoutGroup>();
+            stack.padding = new RectOffset(10, 10, 12, 14);
+            stack.spacing = 6f;
+            stack.childControlWidth = true;
+            stack.childControlHeight = true;
+            stack.childForceExpandWidth = true;
+            stack.childForceExpandHeight = false;
+            stack.childAlignment = TextAnchor.MiddleCenter;
+
+            TextMeshProUGUI captionText = CreateText(cell.transform, "Caption", caption, 14f, ColTextMuted,
+                TextAlignmentOptions.Center);
+            var capLE = captionText.gameObject.AddComponent<LayoutElement>();
+            capLE.preferredHeight = 22f;
+            capLE.flexibleHeight = 0f;
+
+            var sliderGO = new GameObject("Slider", typeof(RectTransform));
+            sliderGO.transform.SetParent(cell.transform, false);
+            var sliderLE = sliderGO.AddComponent<LayoutElement>();
+            sliderLE.preferredHeight = 36f;
+            sliderLE.flexibleHeight = 0f;
+
+            var track = new GameObject("Track", typeof(RectTransform));
+            track.transform.SetParent(sliderGO.transform, false);
+            Stretch((RectTransform)track.transform, new Vector2(0f, 0.36f), new Vector2(1f, 0.64f));
+            var trackImage = track.AddComponent<Image>();
+            trackImage.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            trackImage.type = Image.Type.Sliced;
+            trackImage.color = ColButton;
+            trackImage.raycastTarget = false;
+
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleArea.transform.SetParent(sliderGO.transform, false);
+            Stretch((RectTransform)handleArea.transform, Vector2.zero, Vector2.one, new Vector4(14f, 0f, 14f, 0f));
+
+            var handle = new GameObject("Handle", typeof(RectTransform));
+            handle.transform.SetParent(handleArea.transform, false);
+            var handleRect = (RectTransform)handle.transform;
+            handleRect.sizeDelta = new Vector2(28f, 28f);
+            var handleImage = handle.AddComponent<Image>();
+            handleImage.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+            handleImage.color = ColAccent;
+
+            var slider = sliderGO.AddComponent<Slider>();
+            slider.targetGraphic = handleImage;
+            slider.handleRect = handleRect;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 0f;
+            slider.maxValue = 360f;
+            slider.wholeNumbers = false;
+
+            return slider;
+        }
+
+        /// <summary>
         /// Replaces ONLY the VR floor plan board in the currently open scene, leaving the
         /// rest of the scene (including any hand-arranged salesman canvas) untouched.
         /// Use this instead of a full scene regeneration once you have customized the layout.
@@ -881,7 +1017,18 @@ namespace Godrej.Editor
                 }
             }
 
-            BuildFloorPlanBoard();
+            GameObject board = BuildFloorPlanBoard();
+
+            // Rebuilding replaces the object, so the manager's reference (used by the
+            // PLAN toggle) must be re-pointed at the new instance.
+            var experience = Object.FindFirstObjectByType<LocalExperienceManager>(FindObjectsInactive.Include);
+            if (experience != null && board != null)
+            {
+                var so = new SerializedObject(experience);
+                SetRef(so, "floorPlanBoard", board);
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorUtility.DisplayDialog("Godrej Setup",
                 "VR floor plan board updated in the open scene (knee height, tilted toward the viewer).\n\n" +
@@ -894,13 +1041,13 @@ namespace Godrej.Editor
         /// Thanks to the recenter at session start, "in front" is wherever the customer
         /// is facing when the experience begins. Select it in the Hierarchy to reposition.
         /// </summary>
-        private static void BuildFloorPlanBoard()
+        private static GameObject BuildFloorPlanBoard()
         {
             Texture2D plan = LoadFloorPlanTexture();
             if (plan == null)
             {
                 Debug.LogWarning("[SceneSetupWizard] No floor plan texture found — skipping the VR floor plan board.");
-                return;
+                return null;
             }
 
             var canvasGO = new GameObject("Floor Plan Board (VR)");
@@ -927,6 +1074,8 @@ namespace Godrej.Editor
             var planImage = imageGO.AddComponent<RawImage>();
             planImage.texture = plan;
             planImage.raycastTarget = false;
+
+            return canvasGO;
         }
 
         private static GameObject BuildFloatingLabels(Material[] panoramas, out GameObject[] labelGroups)
