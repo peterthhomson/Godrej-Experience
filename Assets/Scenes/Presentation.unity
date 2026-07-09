@@ -11378,6 +11378,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d464d80cb6ba6f74eb424d61cd48a149, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SquareGridFitter
+  preferredCellSize: {x: 150, y: 235}
 --- !u!114 &1488844249
 MonoBehaviour:
   m_ObjectHideFlags: 0

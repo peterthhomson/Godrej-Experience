@@ -9,8 +9,10 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 using UnityEngine.XR;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.Management;
 
 /// <summary>
@@ -153,6 +155,24 @@ public class NetworkSetup : MonoBehaviour
         xrOrigin.transform.position += new Vector3(0f, TargetEyeHeight - head.y, 0f);
 
         Debug.Log($"[NetworkSetup] Headset recentered (yaw {yaw:F0}°, offset {head.x:F2},{head.z:F2}, eye {head.y:F2}→{TargetEyeHeight}).");
+    }
+
+    /// <summary>
+    /// Presenter devices swap the EventSystem's input module at runtime: XRUIInputModule
+    /// (required on the headset for controller-ray UI) has a defect in its built-in
+    /// fallback path — touch updates only the pointer POSITION and never registers the
+    /// press, so on a mouse-less phone nothing is ever clickable. Unity's standard
+    /// InputSystemUIInputModule handles touch/mouse fully; assigning its default actions
+    /// at runtime is safe (the edit-time pitfall is only about serializing them).
+    /// </summary>
+    private void UseTouchFriendlyUiInput()
+    {
+        var xrModule = FindFirstObjectByType<XRUIInputModule>(FindObjectsInactive.Include);
+        if (xrModule == null) return;
+
+        xrModule.enabled = false; // leave in place; EventSystem uses the enabled module
+        var standardModule = xrModule.gameObject.AddComponent<InputSystemUIInputModule>();
+        standardModule.AssignDefaultActions();
     }
 
     /// <summary>
@@ -305,6 +325,8 @@ public class NetworkSetup : MonoBehaviour
             // salesman app runs on an Android/iOS tablet or phone. Kept out of
             // PlayerSettings because those are shared with the Quest APK build.
             Screen.orientation = ScreenOrientation.Portrait;
+
+            UseTouchFriendlyUiInput();
 
             SetStatus("Ready — press Start Host");
             if (ipDisplayText != null) ipDisplayText.text = $"This device: {GetLocalIPv4()}";

@@ -6,9 +6,13 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using Unity.XR.CoreUtils;
 using UnityEditor;
+using UnityEditor.Build.Reporting;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;
+using UnityEditor.XR.Management;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.XR.Management;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -112,17 +116,29 @@ namespace Godrej.Editor
 
             importer.textureType = TextureImporterType.Default;
             importer.sRGBTexture = true;
-            importer.textureCompression = TextureImporterCompression.Compressed;
 
             if (isFloorPlan)
             {
-                importer.maxTextureSize = 2048;
-                importer.mipmapEnabled = false;
+                // The plan board is a single small texture mounted at a steep angle in world
+                // space (viewed from above, tilted) — NOT flat screen UI. That combination
+                // (oblique viewing + thin lines/small text) is exactly what block compression
+                // (ASTC/ETC2) and disabled mipmaps ruin: compression blurs fine linework, and
+                // without mips an obliquely-viewed texture blurs/aliases from minification.
+                // One uncompressed 4K image costs ~64MB VRAM — trivial next to 14 compressed
+                // panoramas — so there is no real tradeoff here.
+                importer.textureCompression = TextureImporterCompression.Uncompressed;
+                importer.maxTextureSize = 4096;
+                importer.mipmapEnabled = true;
+                importer.filterMode = FilterMode.Trilinear;
+                importer.anisoLevel = 16; // keeps text/lines sharp at the board's tilt angle
                 importer.wrapMode = TextureWrapMode.Clamp;
             }
             else
             {
-                // 4096 keeps all 14 rooms comfortably inside Quest 3 memory once ASTC-compressed.
+                // Photographic panoramas: compression artifacts are invisible in a photo and
+                // memory matters a lot more with 14 of these loaded. 4096 keeps all rooms
+                // comfortably inside Quest 3 memory once ASTC-compressed.
+                importer.textureCompression = TextureImporterCompression.Compressed;
                 importer.maxTextureSize = 4096;
                 importer.mipmapEnabled = true;
                 importer.wrapModeU = TextureWrapMode.Repeat; // 360° horizontal seam must wrap
@@ -870,6 +886,129 @@ namespace Godrej.Editor
             xrOrigin.CameraYOffset = 1.4f;
 
             return originGO;
+        }
+
+        /// <summary>
+        /// Makes ALL room buttons fit inside the grid panel by (re)arming the grid fitter
+        /// with the currently authored cell proportions — nothing else in the layout is
+        /// touched. Cells scale down uniformly just enough for every row to be visible.
+        /// </summary>
+        [MenuItem("Godrej/7. Fit All Room Buttons (keeps your layout)", priority = 5)]
+        public static void FitRoomGrid()
+        {
+            GridLayoutGroup roomGrid = null;
+            foreach (GridLayoutGroup candidate in Object.FindObjectsByType<GridLayoutGroup>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                // The room grid is the one full of buttons.
+                if (candidate.GetComponentsInChildren<Button>(true).Length >= 8)
+                {
+                    roomGrid = candidate;
+                    break;
+                }
+            }
+
+            if (roomGrid == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup", "No room button grid found in the open scene.", "OK");
+                return;
+            }
+
+            var fitter = roomGrid.GetComponent<SquareGridFitter>();
+            if (fitter == null) fitter = roomGrid.gameObject.AddComponent<SquareGridFitter>();
+            fitter.preferredCellSize = roomGrid.cellSize; // keep the authored card proportions
+            fitter.enabled = true;
+
+            EditorUtility.SetDirty(fitter);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorUtility.DisplayDialog("Godrej Setup",
+                $"Room grid fitter armed on '{roomGrid.gameObject.name}' (cell proportions {roomGrid.cellSize.x:F0}×{roomGrid.cellSize.y:F0} preserved).\n\n" +
+                "All rows now scale to fit. Save the scene (Ctrl+S), then rebuild the affected APK(s).", "OK");
+        }
+
+        // =====================================================================
+        //  DEVICE-SPECIFIC BUILDS
+        //  The Quest build is XR-first: the OpenXR loader injects a pre-init hook and an
+        //  "offscreen swapchain, no main display buffer" mode into the player at BUILD
+        //  time. On a phone (no XR runtime) such a build runs its scripts but can never
+        //  present a frame — permanent black screen. So phones get their own build with
+        //  XR stripped, portrait-native, on OpenGL ES 3 for maximum device compatibility.
+        //  All settings are swapped temporarily and restored after the build.
+        // =====================================================================
+
+        [MenuItem("Godrej/5. Build PHONE APK (salesman app)", priority = 20)]
+        public static void BuildPhoneApk()
+        {
+            BuildAndroidApk(xrEnabled: false, "Builds/Godrej-Salesman-Phone.apk");
+        }
+
+        [MenuItem("Godrej/6. Build QUEST APK (customer headset)", priority = 21)]
+        public static void BuildQuestApk()
+        {
+            BuildAndroidApk(xrEnabled: true, "Builds/Godrej-Quest.apk");
+        }
+
+        private static void BuildAndroidApk(bool xrEnabled, string outputPath)
+        {
+            XRGeneralSettings androidXr =
+                XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(BuildTargetGroup.Android);
+            XRManagerSettings xrManager = androidXr != null ? androidXr.Manager : null;
+            if (xrManager == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Build", "XR settings for Android not found.", "OK");
+                return;
+            }
+
+            var savedLoaders = new List<UnityEngine.XR.Management.XRLoader>(xrManager.activeLoaders);
+            bool savedInitOnStart = androidXr.InitManagerOnStart;
+            UIOrientation savedOrientation = PlayerSettings.defaultInterfaceOrientation;
+            GraphicsDeviceType[] savedApis = PlayerSettings.GetGraphicsAPIs(BuildTarget.Android);
+
+            try
+            {
+                if (xrEnabled)
+                {
+                    androidXr.InitManagerOnStart = true;
+                    PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft; // Quest requirement
+                    PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan });
+                }
+                else
+                {
+                    // No XR loaders => no OpenXR pre-init hook, a normal main display buffer,
+                    // and no Quest-only manifest requirements. A plain portrait phone app.
+                    xrManager.TrySetLoaders(new List<UnityEngine.XR.Management.XRLoader>());
+                    androidXr.InitManagerOnStart = false;
+                    PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+                    PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
+                }
+
+                string[] scenes = EditorBuildSettings.scenes
+                    .Where(s => s.enabled)
+                    .Select(s => s.path)
+                    .ToArray();
+                Directory.CreateDirectory("Builds");
+
+                BuildReport report = BuildPipeline.BuildPlayer(scenes, outputPath, BuildTarget.Android, BuildOptions.None);
+
+                if (report.summary.result == BuildResult.Succeeded)
+                {
+                    float sizeMb = report.summary.totalSize / (1024f * 1024f);
+                    EditorUtility.DisplayDialog("Godrej Build",
+                        $"{(xrEnabled ? "QUEST" : "PHONE")} build succeeded ({sizeMb:F0} MB):\n{outputPath}", "OK");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("Godrej Build",
+                        $"Build {report.summary.result}. Check the Console for details.", "OK");
+                }
+            }
+            finally
+            {
+                xrManager.TrySetLoaders(savedLoaders);
+                androidXr.InitManagerOnStart = savedInitOnStart;
+                PlayerSettings.defaultInterfaceOrientation = savedOrientation;
+                PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, savedApis);
+            }
         }
 
         /// <summary>
