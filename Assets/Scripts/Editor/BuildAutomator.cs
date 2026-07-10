@@ -6,9 +6,13 @@ using System.IO;
 
 namespace Godrej.Editor
 {
+    // RETIRED: superseded by SceneSetupWizard menus 5 (phone), 6 (Quest) and 10 (TV),
+    // which swap XR/orientation/graphics settings only for the duration of the build
+    // and always restore them. This class instead saved InitManagerOnStart permanently
+    // (SetXREnabled -> SaveAssets), silently leaving the project in the wrong state for
+    // the next build. Menu entries removed so it cannot be triggered; safe to delete.
     public class BuildAutomator : EditorWindow
     {
-        [MenuItem("Godrej/Builds/Build for Phone (No VR)")]
         public static void BuildForPhone()
         {
             if (EditorUtility.DisplayDialog("Build for Phone", "This will automatically disable XR on startup and build an APK for the Salesman's Phone. Proceed?", "Yes", "Cancel"))
@@ -22,7 +26,6 @@ namespace Godrej.Editor
             }
         }
 
-        [MenuItem("Godrej/Builds/Build for Quest (VR)")]
         public static void BuildForQuest()
         {
             if (EditorUtility.DisplayDialog("Build for Quest", "This will automatically enable XR on startup and build an APK for the Meta Quest. Proceed?", "Yes", "Cancel"))

@@ -48,6 +48,9 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("RawImage on the salesman canvas that displays the preview RenderTexture.")]
     [SerializeField] private RawImage previewImage;
 
+    [Tooltip("Optional: full-screen RawImage on the TV canvas mirroring the same preview RenderTexture (wired by Godrej menu 9).")]
+    [SerializeField] private RawImage tvPreviewImage;
+
     [Tooltip("Vertical field of view of the spectator camera.")]
     [Range(30f, 110f)]
     [SerializeField] private float previewFieldOfView = 65f;
@@ -439,7 +442,28 @@ public class LocalExperienceManager : NetworkBehaviour
 
         if (previewTexture == null)
         {
-            previewTexture = new RenderTexture(previewResolution.x, previewResolution.y, 24)
+            // The TV canvas shows the preview full-screen, so size the texture to the
+            // panel itself: height from the screen's short side (720p floor, 4K ceiling
+            // — an 8K panel gets a 4K preview upscaled by the display, invisible at TV
+            // viewing distance and safe on the GPU), width following the panel's own
+            // aspect so the full-screen image needs neither stretching nor cropping.
+            // The portrait phone viewport keeps the configured (smaller) 16:9 size.
+            Vector2Int size = previewResolution;
+            if (NetworkSetup.IsTvDevice())
+            {
+                float longSide = Mathf.Max(Screen.width, Screen.height);
+                float shortSide = Mathf.Min(Screen.width, Screen.height);
+                int rtHeight = Mathf.Clamp(Mathf.RoundToInt(shortSide), 720, 2160);
+                int rtWidth = Mathf.RoundToInt(rtHeight * (longSide / shortSide));
+                if (rtWidth > 4096) // stay under the safe GLES3 texture ceiling
+                {
+                    rtHeight = Mathf.RoundToInt(rtHeight * 4096f / rtWidth);
+                    rtWidth = 4096;
+                }
+                size = new Vector2Int(rtWidth, rtHeight);
+            }
+
+            previewTexture = new RenderTexture(size.x, size.y, 24)
             {
                 name = "HostPreviewRT",
                 antiAliasing = 1,
@@ -457,6 +481,19 @@ public class LocalExperienceManager : NetworkBehaviour
         {
             previewImage.texture = previewTexture;
             previewImage.color = Color.white;
+        }
+
+        if (tvPreviewImage != null)
+        {
+            tvPreviewImage.texture = previewTexture;
+            tvPreviewImage.color = Color.white;
+
+            // Keep the full-screen view at the texture's exact aspect: the fitter
+            // scales it to cover the screen without ever distorting the image.
+            if (tvPreviewImage.TryGetComponent(out AspectRatioFitter fitter))
+            {
+                fitter.aspectRatio = (float)previewTexture.width / previewTexture.height;
+            }
         }
     }
 

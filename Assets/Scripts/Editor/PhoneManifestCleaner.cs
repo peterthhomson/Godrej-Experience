@@ -85,27 +85,30 @@ namespace Godrej.Editor
                 }
             }
 
-            // 5. Force orientation to Portrait for all activities
+            // 5. Pin every activity to the build's presenter orientation. The Godrej build
+            //    menu sets PlayerSettings.defaultInterfaceOrientation before building:
+            //    Portrait for the phone APK, LandscapeLeft for the TV APK — so the splash
+            //    and first frame are already correct on each device.
+            bool landscapeBuild =
+                PlayerSettings.defaultInterfaceOrientation == UIOrientation.LandscapeLeft ||
+                PlayerSettings.defaultInterfaceOrientation == UIOrientation.LandscapeRight;
+            string desiredOrientation = landscapeBuild ? "sensorLandscape" : "sensorPortrait";
+
             XmlNodeList activities = xmlDoc.SelectNodes("//activity", nsMgr);
             if (activities != null)
             {
                 foreach (XmlNode activity in activities)
                 {
                     XmlAttribute orientationAttr = activity.Attributes["android:screenOrientation"];
-                    if (orientationAttr != null)
+                    if (orientationAttr == null)
                     {
-                        if (orientationAttr.Value == "landscape")
-                        {
-                            orientationAttr.Value = "sensorPortrait";
-                            modified = true;
-                        }
-                    }
-                    else
-                    {
-                        // Add orientation attribute if missing
                         orientationAttr = xmlDoc.CreateAttribute("android", "screenOrientation", "http://schemas.android.com/apk/res/android");
-                        orientationAttr.Value = "sensorPortrait";
                         activity.Attributes.Append(orientationAttr);
+                    }
+
+                    if (orientationAttr.Value != desiredOrientation)
+                    {
+                        orientationAttr.Value = desiredOrientation;
                         modified = true;
                     }
                 }

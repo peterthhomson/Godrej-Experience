@@ -900,6 +900,9 @@ namespace Godrej.Editor
             foreach (GridLayoutGroup candidate in Object.FindObjectsByType<GridLayoutGroup>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
+                // The TV drawer grid sizes its own cells — this tool is for the phone grid.
+                if (candidate.GetComponent<DynamicGridSizer>() != null) continue;
+
                 // The room grid is the one full of buttons.
                 if (candidate.GetComponentsInChildren<Button>(true).Length >= 8)
                 {
@@ -1005,6 +1008,340 @@ namespace Godrej.Editor
         }
 
         // =====================================================================
+        //  MENU 9 — TV CANVAS (large landscape touch screens)
+        //  Full-screen live customer view + a slide-up drawer (pull tab at the
+        //  bottom edge) holding the room buttons and the presenter controls
+        //  (Start Host / Labels / Plan — deliberately NO start-view slider: each
+        //  room uses the start view baked into its material). NetworkSetup
+        //  enables this canvas instead of the phone canvas on TV-class devices;
+        //  the hand-arranged phone canvas is never touched.
+        // =====================================================================
+
+        private const string TvCanvasName = "TV Canvas";
+
+        [MenuItem("Godrej/9. Create or Update TV Canvas (keeps your layout)", priority = 7)]
+        public static void CreateOrUpdateTvCanvas()
+        {
+            var experience = Object.FindFirstObjectByType<LocalExperienceManager>(FindObjectsInactive.Include);
+            var setup = Object.FindFirstObjectByType<NetworkSetup>(FindObjectsInactive.Include);
+            if (experience == null || setup == null)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup",
+                    "No LocalExperienceManager / NetworkSetup found in the open scene.\n" +
+                    "Open Assets/Scenes/Presentation.unity first.", "OK");
+                return;
+            }
+
+            int roomCount = experience.PanoramaCount;
+            if (roomCount == 0)
+            {
+                EditorUtility.DisplayDialog("Godrej Setup",
+                    "LocalExperienceManager has no panorama materials assigned — no room buttons to build.", "OK");
+                return;
+            }
+
+            var setupSO = new SerializedObject(setup);
+            GameObject hostRoot = setupSO.FindProperty("hostRoot").objectReferenceValue as GameObject;
+            GameObject phoneCanvas = FindPhoneCanvas(hostRoot);
+
+            // Idempotent: replace only a previously generated TV canvas.
+            Scene scene = SceneManager.GetActiveScene();
+            GameObject existing = null;
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (existing != null) break;
+                foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.name == TvCanvasName) { existing = t.gameObject; break; }
+                }
+            }
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            // ---- canvas + landscape scaler ------------------------------------
+            // Parented under the host rig so the Quest deactivates it with everything else.
+            var canvasGO = new GameObject(TvCanvasName);
+            canvasGO.transform.SetParent(hostRoot != null ? hostRoot.transform : null, false);
+            var canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            var scaler = canvasGO.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);            // landscape TV reference
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            canvasGO.AddComponent<GraphicRaycaster>();
+
+            // ---- full-screen live viewport --------------------------------------
+            Image backdrop = CreatePanel(canvas.transform, "Background", ColBackground);
+            backdrop.raycastTarget = true;
+            Stretch(backdrop.rectTransform, Vector2.zero, Vector2.one);
+
+            var viewGO = new GameObject("TV Viewport", typeof(RectTransform));
+            viewGO.transform.SetParent(canvas.transform, false);
+            var view = viewGO.AddComponent<RawImage>();
+            view.color = Color.black;  // becomes the live RenderTexture at runtime
+            view.raycastTarget = true; // absorb taps that miss a control
+
+            // Never stretch the live image: the fitter keeps the texture's aspect and
+            // scales it to cover the whole screen at ANY panel resolution or shape
+            // (1080p/4K/8K, 16:9 or not). LocalExperienceManager sets the exact ratio
+            // once the RenderTexture exists (sized to the panel, so normally zero crop).
+            var viewFitter = viewGO.AddComponent<AspectRatioFitter>();
+            viewFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            viewFitter.aspectRatio = 16f / 9f;
+
+            // Overlays parent to the canvas (not the image) so cropping on odd aspect
+            // ratios can never push them off-screen.
+            TextMeshProUGUI caption = CreateText(canvas.transform, "Caption", "LIVE · CUSTOMER VIEW",
+                22f, ColTextMuted, TextAlignmentOptions.TopLeft);
+            var capRect = caption.rectTransform;
+            capRect.anchorMin = new Vector2(0f, 1f);
+            capRect.anchorMax = new Vector2(0f, 1f);
+            capRect.pivot = new Vector2(0f, 1f);
+            capRect.sizeDelta = new Vector2(480f, 34f);
+            capRect.anchoredPosition = new Vector2(28f, -20f);
+
+            Image reticle = CreateIcon(canvas.transform, "Reticle", "UI/Skin/Knob.psd",
+                new Color(1f, 1f, 1f, 0.85f));
+            var reticleRect = reticle.rectTransform;
+            reticleRect.anchorMin = new Vector2(0.5f, 0.5f);
+            reticleRect.anchorMax = new Vector2(0.5f, 0.5f);
+            reticleRect.pivot = new Vector2(0.5f, 0.5f);
+            reticleRect.sizeDelta = new Vector2(26f, 26f);
+            reticleRect.anchoredPosition = Vector2.zero;
+
+            // ---- slide-up drawer -------------------------------------------------
+            const float DrawerHeight = 430f;
+
+            Image drawerImage = CreatePanel(canvas.transform, "Menu Drawer", ColPanel);
+            drawerImage.raycastTarget = true; // taps inside the drawer never reach the viewport
+            var drawerRect = drawerImage.rectTransform;
+            drawerRect.anchorMin = new Vector2(0f, 0f);
+            drawerRect.anchorMax = new Vector2(1f, 0f);
+            drawerRect.pivot = new Vector2(0.5f, 0f);
+            drawerRect.sizeDelta = new Vector2(0f, DrawerHeight);
+            drawerRect.anchoredPosition = Vector2.zero; // saved open; the controller animates it
+
+            var drawerLayout = drawerImage.gameObject.AddComponent<HorizontalLayoutGroup>();
+            drawerLayout.padding = new RectOffset(24, 24, 18, 18);
+            drawerLayout.spacing = 20f;
+            drawerLayout.childControlWidth = true;
+            drawerLayout.childControlHeight = true;
+            drawerLayout.childForceExpandWidth = false;
+            drawerLayout.childForceExpandHeight = true;
+
+            // ---- rooms section (left) --------------------------------------------
+            Image roomsSection = CreatePanel(drawerImage.transform, "Rooms Section", ColCard);
+            AddFlexibleWidth(roomsSection.gameObject, 1f);
+            var roomsStack = roomsSection.gameObject.AddComponent<VerticalLayoutGroup>();
+            roomsStack.padding = new RectOffset(16, 16, 10, 12);
+            roomsStack.spacing = 6f;
+            roomsStack.childControlWidth = true;
+            roomsStack.childControlHeight = true;
+            roomsStack.childForceExpandWidth = true;
+            roomsStack.childForceExpandHeight = false;
+
+            TextMeshProUGUI roomsCaption = CreateText(roomsSection.transform, "Caption", "ROOMS",
+                16f, ColTextMuted, TextAlignmentOptions.MidlineLeft);
+            var roomsCapLE = roomsCaption.gameObject.AddComponent<LayoutElement>();
+            roomsCapLE.preferredHeight = 24f;
+            roomsCapLE.flexibleHeight = 0f;
+
+            var gridHostGO = new GameObject("Grid Host", typeof(RectTransform));
+            gridHostGO.transform.SetParent(roomsSection.transform, false);
+            var gridHostLE = gridHostGO.AddComponent<LayoutElement>();
+            gridHostLE.flexibleHeight = 1f;
+
+            int columns = Mathf.Clamp(Mathf.CeilToInt(roomCount / 2f), 4, 8);
+            int rows = Mathf.CeilToInt(roomCount / (float)columns);
+
+            var gridGO = new GameObject("TV Room Grid", typeof(RectTransform));
+            gridGO.transform.SetParent(gridHostGO.transform, false);
+            Stretch((RectTransform)gridGO.transform, Vector2.zero, Vector2.one);
+            var grid = gridGO.AddComponent<GridLayoutGroup>();
+            grid.padding = new RectOffset(0, 0, 0, 0);
+            grid.spacing = new Vector2(12f, 12f);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = columns;
+            grid.childAlignment = TextAnchor.MiddleCenter;
+            var sizer = gridGO.AddComponent<DynamicGridSizer>();
+            sizer.visibleColumns = columns;
+            sizer.totalRows = rows;
+
+            var roomButtons = new List<Button>();
+            for (int i = 0; i < roomCount; i++)
+            {
+                string label = experience.GetPanoramaName(i);
+                if (string.IsNullOrEmpty(label)) label = $"Room {i + 1}";
+                roomButtons.Add(CreateRoomButton(gridGO.transform, $"TV Room {i:00}", label));
+            }
+
+            // ---- divider: the requested distinction between rooms and controls ----
+            Image divider = CreatePanel(drawerImage.transform, "Divider", ColButton);
+            AddFixedWidth(divider.gameObject, 2f);
+
+            // ---- controls section (right): Start Host / Labels / Plan + status ----
+            Image controlsSection = CreatePanel(drawerImage.transform, "Controls Section", ColCard);
+            AddFixedWidth(controlsSection.gameObject, 470f);
+            var controlsStack = controlsSection.gameObject.AddComponent<VerticalLayoutGroup>();
+            controlsStack.padding = new RectOffset(16, 16, 10, 12);
+            controlsStack.spacing = 8f;
+            controlsStack.childControlWidth = true;
+            controlsStack.childControlHeight = true;
+            controlsStack.childForceExpandWidth = true;
+            controlsStack.childForceExpandHeight = false;
+
+            TextMeshProUGUI controlsCaption = CreateText(controlsSection.transform, "Caption", "CONTROLS",
+                16f, ColTextMuted, TextAlignmentOptions.MidlineLeft);
+            var ctrlCapLE = controlsCaption.gameObject.AddComponent<LayoutElement>();
+            ctrlCapLE.preferredHeight = 24f;
+            ctrlCapLE.flexibleHeight = 0f;
+
+            var buttonRowGO = new GameObject("Button Row", typeof(RectTransform));
+            buttonRowGO.transform.SetParent(controlsSection.transform, false);
+            var buttonRowLE = buttonRowGO.AddComponent<LayoutElement>();
+            buttonRowLE.flexibleHeight = 1f;
+            var buttonRow = buttonRowGO.AddComponent<HorizontalLayoutGroup>();
+            buttonRow.spacing = 10f;
+            buttonRow.childControlWidth = true;
+            buttonRow.childControlHeight = true;
+            buttonRow.childForceExpandWidth = true;
+            buttonRow.childForceExpandHeight = true;
+
+            Button tvStartHost = CreateDockButton(buttonRowGO.transform, "TV Start Host", "START HOST", accent: true);
+            Toggle tvLabels = CreateDockToggle(buttonRowGO.transform, "TV Labels", "LABELS");
+            Toggle tvPlan = CreateDockToggle(buttonRowGO.transform, "TV Plan Toggle", "PLAN");
+
+            var statusRowGO = new GameObject("Status Row", typeof(RectTransform));
+            statusRowGO.transform.SetParent(controlsSection.transform, false);
+            var statusRowLE = statusRowGO.AddComponent<LayoutElement>();
+            statusRowLE.preferredHeight = 104f;
+            statusRowLE.flexibleHeight = 0f;
+            var statusRow = statusRowGO.AddComponent<HorizontalLayoutGroup>();
+            statusRow.spacing = 10f;
+            statusRow.childControlWidth = true;
+            statusRow.childControlHeight = true;
+            statusRow.childForceExpandWidth = true;
+            statusRow.childForceExpandHeight = true;
+
+            TextMeshProUGUI tvStatus = CreateDockDisplay(statusRowGO.transform, "TV VR Status", "STATUS", "Ready", 1.5f);
+            TextMeshProUGUI tvIp = CreateDockDisplay(statusRowGO.transform, "TV Host IP", "HOST IP", "—", 1f);
+
+            // ---- pull tab (rides on the drawer's top edge) -------------------------
+            var tabGO = new GameObject("Pull Tab", typeof(RectTransform));
+            tabGO.transform.SetParent(drawerImage.transform, false);
+            var tabLE = tabGO.AddComponent<LayoutElement>();
+            tabLE.ignoreLayout = true; // manually anchored above the drawer, outside the HLG
+            var tabRect = (RectTransform)tabGO.transform;
+            tabRect.anchorMin = new Vector2(0.5f, 1f);
+            tabRect.anchorMax = new Vector2(0.5f, 1f);
+            tabRect.pivot = new Vector2(0.5f, 0f);
+            tabRect.sizeDelta = new Vector2(320f, 58f);
+            tabRect.anchoredPosition = new Vector2(0f, -2f); // tiny overlap hides the seam
+            var tabImage = tabGO.AddComponent<Image>();
+            tabImage.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            tabImage.type = Image.Type.Sliced;
+            tabImage.color = ColPanel;
+            var tabButton = tabGO.AddComponent<Button>();
+            tabButton.targetGraphic = tabImage;
+            ColorBlock tabColors = tabButton.colors;
+            tabColors.highlightedColor = new Color(1.18f, 1.18f, 1.18f, 1f);
+            tabColors.pressedColor = new Color(1.35f, 1.35f, 1.35f, 1f);
+            tabButton.colors = tabColors;
+
+            Image tabArrow = CreateIcon(tabGO.transform, "Arrow", "UI/Skin/DropdownArrow.psd", ColAccent);
+            var arrowRect = tabArrow.rectTransform;
+            arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
+            arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
+            arrowRect.pivot = new Vector2(0.5f, 0.5f);
+            arrowRect.sizeDelta = new Vector2(26f, 16f);
+            arrowRect.anchoredPosition = new Vector2(-64f, 0f);
+
+            TextMeshProUGUI tabLabel = CreateText(tabGO.transform, "Label", "MENU", 24f, ColText,
+                TextAlignmentOptions.Center);
+            Stretch(tabLabel.rectTransform, Vector2.zero, Vector2.one);
+            tabLabel.fontStyle = FontStyles.Bold;
+
+            // ---- behaviour components ---------------------------------------------
+            var drawerController = drawerImage.gameObject.AddComponent<TvDrawerController>();
+            var drawerSO = new SerializedObject(drawerController);
+            SetRef(drawerSO, "drawerPanel", drawerRect);
+            SetRef(drawerSO, "pullTab", tabButton);
+            SetRef(drawerSO, "tabArrow", arrowRect);
+            drawerSO.ApplyModifiedPropertiesWithoutUndo();
+
+            var indicator = controlsSection.gameObject.AddComponent<DockStatusIndicator>();
+            var indicatorSO = new SerializedObject(indicator);
+            SetRef(indicatorSO, "networkSetup", setup);
+            SetRef(indicatorSO, "startHostButton", tvStartHost);
+            SetRef(indicatorSO, "startHostIcon", FindChildComponent<Image>(tvStartHost.transform, "Icon"));
+            SetRef(indicatorSO, "startHostLabel", FindChildComponent<TextMeshProUGUI>(tvStartHost.transform, "Label"));
+            SetRef(indicatorSO, "labelsToggle", tvLabels);
+            SetRef(indicatorSO, "labelsIcon", FindChildComponent<Image>(tvLabels.transform, "Icon"));
+            SetRef(indicatorSO, "planToggle", tvPlan);
+            SetRef(indicatorSO, "planIcon", FindChildComponent<Image>(tvPlan.transform, "Icon"));
+            indicatorSO.ApplyModifiedPropertiesWithoutUndo();
+
+            // ---- wire the managers ---------------------------------------------------
+            var expSO = new SerializedObject(experience);
+            SetRef(expSO, "tvPreviewImage", view);
+            expSO.ApplyModifiedPropertiesWithoutUndo();
+
+            SetRef(setupSO, "tvCanvas", canvasGO);
+            if (phoneCanvas != null) SetRef(setupSO, "phoneCanvas", phoneCanvas);
+            SetRef(setupSO, "tvStartHostButton", tvStartHost);
+            SetRef(setupSO, "tvStatusText", tvStatus);
+            SetRef(setupSO, "tvIpDisplayText", tvIp);
+            setupSO.ApplyModifiedPropertiesWithoutUndo();
+
+            // ---- persistent button wiring ---------------------------------------------
+            UnityEventTools.AddPersistentListener(tvStartHost.onClick, new UnityAction(setup.StartHost));
+            UnityEventTools.AddPersistentListener(tvLabels.onValueChanged, new UnityAction<bool>(experience.SetLabelsVisible));
+            UnityEventTools.AddPersistentListener(tvPlan.onValueChanged, new UnityAction<bool>(experience.SetFloorPlanVisible));
+            for (int i = 0; i < roomButtons.Count; i++)
+            {
+                UnityEventTools.AddIntPersistentListener(roomButtons[i].onClick, experience.SetPanorama, i);
+            }
+
+            // Saved inactive: NetworkSetup turns it on at boot on TV-class devices only.
+            canvasGO.SetActive(false);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            Selection.activeGameObject = canvasGO;
+            EditorUtility.DisplayDialog("Godrej Setup",
+                $"TV canvas built: full-screen live view + slide-up drawer ({roomCount} rooms in a {columns}×{rows} grid, " +
+                "START HOST / LABELS / PLAN — no slider; every room uses the start view baked into its material).\n\n" +
+                "Saved INACTIVE — it enables itself on TV-class devices (Android TV, large touch panels) while phones " +
+                "keep the portrait canvas. Editor preview: a LANDSCAPE Game view — e.g. the 'Godrej — Android TV " +
+                "Touchscreen' Device Simulator profile or the 16:9 preset — shows the TV canvas in Play mode; a " +
+                "portrait Game view shows the phone canvas.\n\n" +
+                "Save the scene (Ctrl+S), then rebuild the PHONE APK (menu 5) — the TV runs that same salesman APK. " +
+                "The Quest APK does NOT need a rebuild (no networked objects changed).", "OK");
+        }
+
+        private static GameObject FindPhoneCanvas(GameObject hostRoot)
+        {
+            foreach (Canvas candidate in Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (candidate.gameObject.name == "Salesman Canvas") return candidate.gameObject;
+            }
+
+            // Fallback: any screen-space canvas under the host rig that isn't the TV canvas.
+            if (hostRoot != null)
+            {
+                foreach (Canvas candidate in hostRoot.GetComponentsInChildren<Canvas>(true))
+                {
+                    if (candidate.renderMode == RenderMode.ScreenSpaceOverlay &&
+                        candidate.gameObject.name != TvCanvasName)
+                    {
+                        return candidate.gameObject;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // =====================================================================
         //  DEVICE-SPECIFIC BUILDS
         //  The Quest build is XR-first: the OpenXR loader injects a pre-init hook and an
         //  "offscreen swapchain, no main display buffer" mode into the player at BUILD
@@ -1014,19 +1351,49 @@ namespace Godrej.Editor
         //  All settings are swapped temporarily and restored after the build.
         // =====================================================================
 
+        private enum ApkKind { Phone, Quest, Tv }
+
+        // Per-APK presenter-mode override baked into the build as a Resources text asset:
+        // "phone" / "tv" pin the canvas, "auto" (the editor default) uses runtime detection.
+        private const string PresenterModeAssetPath = "Assets/Resources/GodrejPresenterMode.txt";
+
         [MenuItem("Godrej/5. Build PHONE APK (salesman app)", priority = 20)]
         public static void BuildPhoneApk()
         {
-            BuildAndroidApk(xrEnabled: false, "Builds/Godrej-Salesman-Phone.apk");
+            BuildAndroidApk(ApkKind.Phone, "Builds/Godrej-Salesman-Phone.apk");
         }
 
         [MenuItem("Godrej/6. Build QUEST APK (customer headset)", priority = 21)]
         public static void BuildQuestApk()
         {
-            BuildAndroidApk(xrEnabled: true, "Builds/Godrej-Quest.apk");
+            BuildAndroidApk(ApkKind.Quest, "Builds/Godrej-Quest.apk");
         }
 
-        private static void BuildAndroidApk(bool xrEnabled, string outputPath)
+        [MenuItem("Godrej/10. Build TV APK (salesman app, landscape)", priority = 22)]
+        public static void BuildTvApk()
+        {
+            // The TV canvas ships inside the scene — building without it would give an
+            // APK that silently falls back to the phone layout.
+            if (Object.FindFirstObjectByType<TvDrawerController>(FindObjectsInactive.Include) == null &&
+                !EditorUtility.DisplayDialog("Godrej Build",
+                    "The open scene has no TV Canvas.\n\nRun 'Godrej > 9. Create or Update TV Canvas' " +
+                    "first and save the scene, or the TV app will fall back to the phone layout.\n\nBuild anyway?",
+                    "Build Anyway", "Cancel"))
+            {
+                return;
+            }
+
+            BuildAndroidApk(ApkKind.Tv, "Builds/Godrej-Salesman-TV.apk");
+        }
+
+        private static void WritePresenterMode(string mode)
+        {
+            EnsureFolder("Assets/Resources");
+            File.WriteAllText(PresenterModeAssetPath, mode);
+            AssetDatabase.ImportAsset(PresenterModeAssetPath, ImportAssetOptions.ForceUpdate);
+        }
+
+        private static void BuildAndroidApk(ApkKind kind, string outputPath)
         {
             XRGeneralSettings androidXr =
                 XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(BuildTargetGroup.Android);
@@ -1037,13 +1404,19 @@ namespace Godrej.Editor
                 return;
             }
 
+            bool xrEnabled = kind == ApkKind.Quest;
+
             var savedLoaders = new List<UnityEngine.XR.Management.XRLoader>(xrManager.activeLoaders);
             bool savedInitOnStart = androidXr.InitManagerOnStart;
             UIOrientation savedOrientation = PlayerSettings.defaultInterfaceOrientation;
             GraphicsDeviceType[] savedApis = PlayerSettings.GetGraphicsAPIs(BuildTarget.Android);
+            AndroidSdkVersions savedMinSdk = PlayerSettings.Android.minSdkVersion;
+            AndroidArchitecture savedArchitectures = PlayerSettings.Android.targetArchitectures;
 
             try
             {
+                WritePresenterMode(kind == ApkKind.Phone ? "phone" : kind == ApkKind.Tv ? "tv" : "auto");
+
                 if (xrEnabled)
                 {
                     androidXr.InitManagerOnStart = true;
@@ -1053,11 +1426,25 @@ namespace Godrej.Editor
                 else
                 {
                     // No XR loaders => no OpenXR pre-init hook, a normal main display buffer,
-                    // and no Quest-only manifest requirements. A plain portrait phone app.
+                    // and no Quest-only manifest requirements. A plain presenter app.
                     xrManager.TrySetLoaders(new List<UnityEngine.XR.Management.XRLoader>());
                     androidXr.InitManagerOnStart = false;
-                    PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+                    PlayerSettings.defaultInterfaceOrientation = kind == ApkKind.Tv
+                        ? UIOrientation.LandscapeLeft   // TVs are landscape-native: correct splash from frame one
+                        : UIOrientation.Portrait;
                     PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
+
+                    // The Quest needs minSdk 32, but presenter hardware in the field is often
+                    // older — Android 8 (API 26) keeps virtually every phone/panel installable.
+                    PlayerSettings.Android.minSdkVersion = (AndroidSdkVersions)26;
+
+                    if (kind == ApkKind.Tv)
+                    {
+                        // Unknown TV hardware: many Android panels/set-top boxes are still
+                        // 32-bit. Shipping both ABIs costs APK size but never fails to install.
+                        PlayerSettings.Android.targetArchitectures =
+                            AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+                    }
                 }
 
                 string[] scenes = EditorBuildSettings.scenes
@@ -1072,7 +1459,7 @@ namespace Godrej.Editor
                 {
                     float sizeMb = report.summary.totalSize / (1024f * 1024f);
                     EditorUtility.DisplayDialog("Godrej Build",
-                        $"{(xrEnabled ? "QUEST" : "PHONE")} build succeeded ({sizeMb:F0} MB):\n{outputPath}", "OK");
+                        $"{kind.ToString().ToUpperInvariant()} build succeeded ({sizeMb:F0} MB):\n{outputPath}", "OK");
                 }
                 else
                 {
@@ -1082,10 +1469,13 @@ namespace Godrej.Editor
             }
             finally
             {
+                WritePresenterMode("auto");
                 xrManager.TrySetLoaders(savedLoaders);
                 androidXr.InitManagerOnStart = savedInitOnStart;
                 PlayerSettings.defaultInterfaceOrientation = savedOrientation;
                 PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, savedApis);
+                PlayerSettings.Android.minSdkVersion = savedMinSdk;
+                PlayerSettings.Android.targetArchitectures = savedArchitectures;
             }
         }
 

@@ -9,6 +9,7 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 using UnityEngine.XR;
@@ -66,10 +67,31 @@ public class NetworkSetup : MonoBehaviour
     [SerializeField] private Button connectButton;
     [SerializeField] private TextMeshProUGUI questStatusText;
 
+    [Header("TV Presenter (large landscape touch screens)")]
+    [Tooltip("Landscape drawer UI, enabled instead of the phone canvas on TV-class devices. Built by Godrej menu 9.")]
+    [SerializeField] private GameObject tvCanvas;
+    [Tooltip("The portrait phone/tablet presenter canvas, disabled on TV-class devices.")]
+    [SerializeField] private GameObject phoneCanvas;
+    [SerializeField] private Button tvStartHostButton;
+    [SerializeField] private TextMeshProUGUI tvStatusText;
+    [SerializeField] private TextMeshProUGUI tvIpDisplayText;
+
     private const string LastHostIpKey = "GodrejXR.LastHostIp";
 
     private bool isQuestClient;
     private bool sessionStarted;
+
+    // Original phone-canvas UI references, kept so the presenter canvas (and the
+    // status/IP/button routing) can be switched as a unit at boot — and live in the
+    // editor when the Game view is resized between portrait and landscape.
+    private Button phoneStartHostButton;
+    private TextMeshProUGUI phoneStatusText;
+    private TextMeshProUGUI phoneIpDisplayText;
+    private string lastStatusMessage;
+    private string lastIpMessage;
+#if UNITY_EDITOR
+    private bool editorTvApplied;
+#endif
     private UdpClient discoverySocket;                 // host: responder / client: prober
     private volatile string discoveredHostIp;          // written by socket thread, read on main thread
     private byte[] probeBuffer;                        // cached, allocation-free sends
@@ -105,7 +127,126 @@ public class NetworkSetup : MonoBehaviour
         // headset/client); on an ordinary Android phone or tablet it cannot, so the same
         // build boots as the salesman host. Editor and desktop builds are always the host.
         isQuestClient = IsXrHeadsetDevice();
+
+        // TV presenter: same host role as the phone, different canvas. Applied here,
+        // before Start() wires listeners, so status/IP/button writes land on the
+        // canvas the presenter can actually see.
+        phoneStartHostButton = startHostButton;
+        phoneStatusText = statusText;
+        phoneIpDisplayText = ipDisplayText;
+        if (!isQuestClient) ApplyPresenterCanvas(IsTvDevice());
     }
+
+    /// <summary>
+    /// Enables exactly one presenter canvas and routes every status/IP/button write
+    /// to it. Safe to call repeatedly; used at boot and by the editor live-preview
+    /// swap when the Game view is resized between portrait and landscape.
+    /// </summary>
+    private void ApplyPresenterCanvas(bool tvPresenter)
+    {
+        if (phoneCanvas != null) phoneCanvas.SetActive(!tvPresenter);
+        if (tvCanvas != null) tvCanvas.SetActive(tvPresenter);
+
+        bool useTvRefs = tvPresenter && tvCanvas != null;
+        startHostButton = useTvRefs && tvStartHostButton != null ? tvStartHostButton : phoneStartHostButton;
+        statusText = useTvRefs && tvStatusText != null ? tvStatusText : phoneStatusText;
+        ipDisplayText = useTvRefs && tvIpDisplayText != null ? tvIpDisplayText : phoneIpDisplayText;
+
+        // Carry live values over so the newly shown canvas is never stale.
+        if (statusText != null && !string.IsNullOrEmpty(lastStatusMessage)) statusText.text = lastStatusMessage;
+        if (ipDisplayText != null && !string.IsNullOrEmpty(lastIpMessage)) ipDisplayText.text = lastIpMessage;
+        if (startHostButton != null) startHostButton.interactable = !sessionStarted;
+
+#if UNITY_EDITOR
+        editorTvApplied = tvPresenter;
+#endif
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private static bool? cachedIsTvDevice;
+#endif
+
+    /// <summary>
+    /// True on TV-class presenter hardware: Android TV / Google TV devices and large
+    /// Android touch panels (interactive displays / signage screens). Phones and
+    /// tablets stay on the portrait canvas. In the editor (and desktop builds) the
+    /// window shape decides, so a landscape Game view — or the "Godrej — Android TV"
+    /// profile in the Device Simulator — previews the TV canvas, while a portrait
+    /// Game view previews the phone canvas.
+    /// </summary>
+    public static bool IsTvDevice()
+    {
+        if (IsXrHeadsetDevice()) return false;
+
+        // Per-APK override baked by the wizard build menus (Resources/GodrejPresenterMode.txt):
+        // the TV APK always uses the TV layout and the phone APK always the portrait layout,
+        // so a live presentation never depends on hardware detection guessing right.
+        string mode = BakedPresenterMode();
+        if (mode == "tv") return true;
+        if (mode == "phone") return false;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        cachedIsTvDevice ??= DetectAndroidTv();
+        return cachedIsTvDevice.Value;
+#else
+        return Screen.width > Screen.height;
+#endif
+    }
+
+    private static string cachedPresenterMode;
+
+    private static string BakedPresenterMode()
+    {
+        if (cachedPresenterMode == null)
+        {
+            TextAsset asset = Resources.Load<TextAsset>("GodrejPresenterMode");
+            cachedPresenterMode = asset != null ? asset.text.Trim().ToLowerInvariant() : "auto";
+        }
+        return cachedPresenterMode;
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private static bool DetectAndroidTv()
+    {
+        // Real Android TV / Google TV: Unity classifies these as consoles, and the OS
+        // reports the television UI mode. Either signal alone is decisive.
+        if (SystemInfo.deviceType == DeviceType.Console) return true;
+        if (IsAndroidTvUiMode()) return true;
+
+        // An Android device with no touchscreen at all can only be a TV/set-top box.
+        if (Touchscreen.current == null) return true;
+
+        // Plain-Android touch panels (interactive displays) identify as ordinary
+        // handhelds — fall back to the physical diagonal: >= 20 inches is no tablet.
+        float dpi = Screen.dpi;
+        if (dpi > 0f)
+        {
+            float widthInches = Screen.width / dpi;
+            float heightInches = Screen.height / dpi;
+            return Mathf.Sqrt(widthInches * widthInches + heightInches * heightInches) >= 20f;
+        }
+
+        return false;
+    }
+
+    private static bool IsAndroidTvUiMode()
+    {
+        try
+        {
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (AndroidJavaObject activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (AndroidJavaObject uiModeManager = activity.Call<AndroidJavaObject>("getSystemService", "uimode"))
+            {
+                const int UiModeTypeTelevision = 4; // android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+                return uiModeManager != null && uiModeManager.Call<int>("getCurrentModeType") == UiModeTypeTelevision;
+            }
+        }
+        catch (Exception)
+        {
+            return false; // any JNI hiccup: fall through to the size heuristic
+        }
+    }
+#endif
 
     /// <summary>
     /// True only on an Android device where an XR loader actually initialized (a headset).
@@ -276,6 +417,15 @@ public class NetworkSetup : MonoBehaviour
 
     private void Update()
     {
+#if UNITY_EDITOR
+        // Editor preview: resizing the Game view between landscape and portrait swaps
+        // the presenter canvas live, so both layouts can be checked in one Play session.
+        if (!isQuestClient && IsTvDevice() != editorTvApplied)
+        {
+            ApplyPresenterCanvas(IsTvDevice());
+        }
+#endif
+
         // Client: fire periodic discovery probes and react to a located host.
         if (!isQuestClient || sessionStarted) return;
 
@@ -321,15 +471,22 @@ public class NetworkSetup : MonoBehaviour
         }
         else
         {
-            // Portrait-first presenter UI. No-op on desktop; locks rotation when the
-            // salesman app runs on an Android/iOS tablet or phone. Kept out of
+            // Exactly one presenter canvas per device: big landscape screens get the
+            // full-screen drawer UI, phones/tablets keep the portrait canvas.
+            bool tvPresenter = IsTvDevice();
+            ApplyPresenterCanvas(tvPresenter);
+
+            // Phones present in portrait; TV-class panels are landscape-native hardware
+            // where a portrait request renders sideways. No-op on desktop. Kept out of
             // PlayerSettings because those are shared with the Quest APK build.
-            Screen.orientation = ScreenOrientation.Portrait;
+            Screen.orientation = tvPresenter
+                ? ScreenOrientation.LandscapeLeft
+                : ScreenOrientation.Portrait;
 
             UseTouchFriendlyUiInput();
 
             SetStatus("Ready — press Start Host");
-            if (ipDisplayText != null) ipDisplayText.text = $"This device: {GetLocalIPv4()}";
+            SetIpText($"This device: {GetLocalIPv4()}");
         }
     }
 
@@ -350,7 +507,7 @@ public class NetworkSetup : MonoBehaviour
         {
             sessionStarted = true;
             SetStatus("Hosting — waiting for headset…");
-            if (ipDisplayText != null) ipDisplayText.text = $"Host IP: {localIp}   Port: {port}";
+            SetIpText($"Host IP: {localIp}   Port: {port}");
             if (startHostButton != null) startHostButton.interactable = false;
             StartHostDiscoveryResponder();
         }
@@ -656,9 +813,16 @@ public class NetworkSetup : MonoBehaviour
         }
         else
         {
+            lastStatusMessage = message;
             if (statusText != null) statusText.text = message;
         }
 
         Debug.Log($"[NetworkSetup] {message}");
+    }
+
+    private void SetIpText(string message)
+    {
+        lastIpMessage = message;
+        if (ipDisplayText != null) ipDisplayText.text = message;
     }
 }

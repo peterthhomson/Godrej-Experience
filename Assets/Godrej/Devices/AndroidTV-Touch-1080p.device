@@ -1,0 +1,16 @@
+{
+    "friendlyName": "Godrej — Android TV Touchscreen (1080p)",
+    "version": 1,
+    "screens": [
+        {
+            "width": 1920,
+            "height": 1080,
+            "navigationBarHeight": 0,
+            "dpi": 48.0
+        }
+    ],
+    "systemInfo": {
+        "deviceModel": "Android TV Touch Panel",
+        "operatingSystem": "Android OS 11"
+    }
+}
