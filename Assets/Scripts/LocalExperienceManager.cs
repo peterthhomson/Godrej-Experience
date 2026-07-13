@@ -104,6 +104,13 @@ public class LocalExperienceManager : NetworkBehaviour
 
     private static readonly int RotationProperty = Shader.PropertyToID("_Rotation");
 
+    /// <summary>
+    /// Set by NetworkSetup on the remote-control phone (baked mode "remote"): mirrors
+    /// every salesman action ("pano"/"labels"/"plan"/"view" + numeric value) to the TV
+    /// presenter over the LAN. Null on every other device, so forwarding costs nothing.
+    /// </summary>
+    public static System.Action<string, float> RemoteForward;
+
     /// <summary>Number of configured panoramas (for UI generation).</summary>
     public int PanoramaCount => panoramaMaterials != null ? panoramaMaterials.Length : 0;
 
@@ -131,7 +138,9 @@ public class LocalExperienceManager : NetworkBehaviour
         // immediately so rooms can be previewed before Start Host is pressed.
         // Never runs on the headset (runtime XR check, not a compile-time platform check,
         // because the same Android APK serves both the phone host and the Quest client).
-        if (!NetworkSetup.IsXrHeadsetDevice())
+        // The remote APK shows big TV controls instead of the preview — skip the
+        // RenderTexture and camera cost entirely there.
+        if (!NetworkSetup.IsXrHeadsetDevice() && !NetworkSetup.IsRemoteControl())
         {
             EnsurePreviewTexture();
         }
@@ -262,6 +271,8 @@ public class LocalExperienceManager : NetworkBehaviour
             return;
         }
 
+        RemoteForward?.Invoke("pano", index);
+
         if (IsSpawned)
         {
             if (!IsServer) return; // Host-authoritative: the Quest can never change rooms.
@@ -279,6 +290,8 @@ public class LocalExperienceManager : NetworkBehaviour
     /// </summary>
     public void SetLabelsVisible(bool visible)
     {
+        RemoteForward?.Invoke("labels", visible ? 1f : 0f);
+
         if (IsSpawned)
         {
             if (!IsServer) return;
@@ -296,6 +309,8 @@ public class LocalExperienceManager : NetworkBehaviour
     /// </summary>
     public void SetFloorPlanVisible(bool visible)
     {
+        RemoteForward?.Invoke("plan", visible ? 1f : 0f);
+
         if (IsSpawned)
         {
             if (!IsServer) return;
@@ -317,6 +332,7 @@ public class LocalExperienceManager : NetworkBehaviour
     public void SetStartViewRotation(float degrees)
     {
         degrees = Mathf.Repeat(degrees, 360f);
+        RemoteForward?.Invoke("view", degrees);
 
         if (IsSpawned)
         {

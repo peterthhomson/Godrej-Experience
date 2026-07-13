@@ -109,3 +109,6 @@ InitTestScene*.unity*
 *_BackUpThisFolder_ButDontShipItWithYourGame/
 *_BurstDebugInformation_DoNotShip/
 Godrej Panos/
+
+# Ignored large baked files
+files/

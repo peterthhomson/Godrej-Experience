@@ -12,6 +12,7 @@ using UnityEditor.SceneManagement;
 using UnityEditor.XR.Management;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.XR.Management;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -326,9 +327,8 @@ namespace Godrej.Editor
             // validation hard-rejects Portrait/AutoRotation and fails the Android build before
             // Gradle even runs (easy to break by accident — Player Settings has a plain
             // "Portrait" checkbox that looks like it only affects 2D platforms, but it doesn't).
-            // The salesman UI is portrait-first regardless: NetworkSetup forces
-            // Screen.orientation = Portrait at runtime on host devices, which works
-            // independently of this build-time default and only applies on non-Quest builds.
+            // Dedicated presenter builds temporarily override this setting: the salesman
+            // APK enables Android rotation and swaps between its phone and TV canvases.
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
 
             Selection.activeGameObject = experienceGO;
@@ -1347,11 +1347,12 @@ namespace Godrej.Editor
         //  "offscreen swapchain, no main display buffer" mode into the player at BUILD
         //  time. On a phone (no XR runtime) such a build runs its scripts but can never
         //  present a frame — permanent black screen. So phones get their own build with
-        //  XR stripped, portrait-native, on OpenGL ES 3 for maximum device compatibility.
+        //  XR stripped and OpenGL ES 3 for maximum device compatibility.
         //  All settings are swapped temporarily and restored after the build.
         // =====================================================================
 
-        private enum ApkKind { Phone, Quest, Tv }
+        private enum ApkKind { Phone, Quest, Tv, Remote }
+        private static bool suppressBuildDialogs;
 
         // Per-APK presenter-mode override baked into the build as a Resources text asset:
         // "phone" / "tv" pin the canvas, "auto" (the editor default) uses runtime detection.
@@ -1374,7 +1375,8 @@ namespace Godrej.Editor
         {
             // The TV canvas ships inside the scene — building without it would give an
             // APK that silently falls back to the phone layout.
-            if (Object.FindFirstObjectByType<TvDrawerController>(FindObjectsInactive.Include) == null &&
+            if (!Application.isBatchMode &&
+                Object.FindFirstObjectByType<TvDrawerController>(FindObjectsInactive.Include) == null &&
                 !EditorUtility.DisplayDialog("Godrej Build",
                     "The open scene has no TV Canvas.\n\nRun 'Godrej > 9. Create or Update TV Canvas' " +
                     "first and save the scene, or the TV app will fall back to the phone layout.\n\nBuild anyway?",
@@ -1384,6 +1386,118 @@ namespace Godrej.Editor
             }
 
             BuildAndroidApk(ApkKind.Tv, "Builds/Godrej-Salesman-TV.apk");
+        }
+
+        [MenuItem("Godrej/11. Build REMOTE APK (phone remote for the TV)", priority = 23)]
+        public static void BuildRemoteApk()
+        {
+            // Same salesman phone UI, but baked mode "remote": it never hosts — it finds
+            // the TV over the LAN and mirrors every action to it. Ships under its own
+            // application id, so it installs ALONGSIDE the salesman phone app.
+            BuildAndroidApk(ApkKind.Remote, "Builds/Godrej-Remote.apk");
+        }
+
+        [MenuItem("Godrej/12. Build ALL PRESENTER APKs (TV + phone + remote)", priority = 24)]
+        public static void BuildAllPresenterApks()
+        {
+            suppressBuildDialogs = true;
+            try
+            {
+                BuildAndroidApk(ApkKind.Tv, "Builds/Godrej-Salesman-TV.apk");
+                BuildAndroidApk(ApkKind.Phone, "Builds/Godrej-Salesman-Phone.apk");
+                BuildAndroidApk(ApkKind.Remote, "Builds/Godrej-Remote.apk");
+            }
+            finally
+            {
+                suppressBuildDialogs = false;
+            }
+        }
+
+        [MenuItem("Godrej/13. Build WINDOWS EXE (Samsung Flip touchscreen)", priority = 25)]
+        public static void BuildSamsungFlipWindowsExe()
+        {
+            if (!Application.isBatchMode &&
+                Object.FindFirstObjectByType<TvDrawerController>(FindObjectsInactive.Include) == null &&
+                !EditorUtility.DisplayDialog("Godrej Build",
+                    "The open scene has no TV Canvas.\n\nRun 'Godrej > 9. Create or Update TV Canvas' " +
+                    "first and save the scene, or the Windows app will fall back to the phone layout.\n\nBuild anyway?",
+                    "Build Anyway", "Cancel"))
+            {
+                return;
+            }
+
+            const string outputPath =
+                "Builds/Godrej-Samsung-Flip-Windows/Godrej-Samsung-Flip.exe";
+            string[] scenes = EditorBuildSettings.scenes
+                .Where(scene => scene.enabled)
+                .Select(scene => scene.path)
+                .ToArray();
+
+            XRGeneralSettings standaloneXr =
+                XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(BuildTargetGroup.Standalone);
+            XRManagerSettings standaloneXrManager = standaloneXr != null ? standaloneXr.Manager : null;
+            List<UnityEngine.XR.Management.XRLoader> savedLoaders = standaloneXrManager != null
+                ? new List<UnityEngine.XR.Management.XRLoader>(standaloneXrManager.activeLoaders)
+                : null;
+            bool savedInitOnStart = standaloneXr != null && standaloneXr.InitManagerOnStart;
+            string savedProductName = PlayerSettings.productName;
+            ScriptingImplementation savedScriptingBackend = PlayerSettings.GetScriptingBackend(
+                UnityEditor.Build.NamedBuildTarget.Standalone);
+            FullScreenMode savedFullScreenMode = PlayerSettings.fullScreenMode;
+            int savedWidth = PlayerSettings.defaultScreenWidth;
+            int savedHeight = PlayerSettings.defaultScreenHeight;
+            bool savedResizable = PlayerSettings.resizableWindow;
+
+            try
+            {
+                WritePresenterMode("tv");
+                if (standaloneXrManager != null)
+                    standaloneXrManager.TrySetLoaders(new List<UnityEngine.XR.Management.XRLoader>());
+                if (standaloneXr != null)
+                    standaloneXr.InitManagerOnStart = false;
+
+                PlayerSettings.productName = "Godrej Experience - Samsung Flip";
+                PlayerSettings.SetScriptingBackend(
+                    UnityEditor.Build.NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+                PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
+                PlayerSettings.defaultScreenWidth = 1920;
+                PlayerSettings.defaultScreenHeight = 1080;
+                PlayerSettings.resizableWindow = true;
+
+                string outputDirectory = Path.GetDirectoryName(outputPath);
+                if (!string.IsNullOrEmpty(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
+
+                BuildReport report = BuildPipeline.BuildPlayer(
+                    scenes, outputPath, BuildTarget.StandaloneWindows64, BuildOptions.None);
+                if (report.summary.result == BuildResult.Succeeded)
+                {
+                    float sizeMb = report.summary.totalSize / (1024f * 1024f);
+                    ReportBuildResult(
+                        $"WINDOWS Samsung Flip build succeeded ({sizeMb:F0} MB): {outputPath}");
+                }
+                else
+                {
+                    ReportBuildResult(
+                        $"WINDOWS Samsung Flip build {report.summary.result}. Check the Console for details.",
+                        error: true);
+                }
+            }
+            finally
+            {
+                WritePresenterMode("auto");
+                if (standaloneXrManager != null && savedLoaders != null)
+                    standaloneXrManager.TrySetLoaders(savedLoaders);
+                if (standaloneXr != null)
+                    standaloneXr.InitManagerOnStart = savedInitOnStart;
+                PlayerSettings.productName = savedProductName;
+                PlayerSettings.SetScriptingBackend(
+                    UnityEditor.Build.NamedBuildTarget.Standalone, savedScriptingBackend);
+                PlayerSettings.fullScreenMode = savedFullScreenMode;
+                PlayerSettings.defaultScreenWidth = savedWidth;
+                PlayerSettings.defaultScreenHeight = savedHeight;
+                PlayerSettings.resizableWindow = savedResizable;
+            }
         }
 
         private static void WritePresenterMode(string mode)
@@ -1409,13 +1523,35 @@ namespace Godrej.Editor
             var savedLoaders = new List<UnityEngine.XR.Management.XRLoader>(xrManager.activeLoaders);
             bool savedInitOnStart = androidXr.InitManagerOnStart;
             UIOrientation savedOrientation = PlayerSettings.defaultInterfaceOrientation;
+            bool savedAutoPortrait = PlayerSettings.allowedAutorotateToPortrait;
+            bool savedAutoPortraitUpsideDown = PlayerSettings.allowedAutorotateToPortraitUpsideDown;
+            bool savedAutoLandscapeLeft = PlayerSettings.allowedAutorotateToLandscapeLeft;
+            bool savedAutoLandscapeRight = PlayerSettings.allowedAutorotateToLandscapeRight;
             GraphicsDeviceType[] savedApis = PlayerSettings.GetGraphicsAPIs(BuildTarget.Android);
             AndroidSdkVersions savedMinSdk = PlayerSettings.Android.minSdkVersion;
             AndroidArchitecture savedArchitectures = PlayerSettings.Android.targetArchitectures;
+            string savedAppId = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android);
+            string savedProductName = PlayerSettings.productName;
+            var savedMsaa = new Dictionary<UniversalRenderPipelineAsset, int>();
 
             try
             {
-                WritePresenterMode(kind == ApkKind.Phone ? "phone" : kind == ApkKind.Tv ? "tv" : "auto");
+                WritePresenterMode(kind switch
+                {
+                    ApkKind.Phone => "phone",
+                    ApkKind.Tv => "tv",
+                    ApkKind.Remote => "remote",
+                    _ => "auto"
+                });
+
+                if (kind == ApkKind.Remote)
+                {
+                    // Own identity: the remote must coexist with the salesman app on the
+                    // same phone (identical ids would overwrite each other on install).
+                    PlayerSettings.SetApplicationIdentifier(
+                        UnityEditor.Build.NamedBuildTarget.Android, savedAppId + ".remote");
+                    PlayerSettings.productName = "Godrej Remote";
+                }
 
                 if (xrEnabled)
                 {
@@ -1429,21 +1565,53 @@ namespace Godrej.Editor
                     // and no Quest-only manifest requirements. A plain presenter app.
                     xrManager.TrySetLoaders(new List<UnityEngine.XR.Management.XRLoader>());
                     androidXr.InitManagerOnStart = false;
-                    PlayerSettings.defaultInterfaceOrientation = kind == ApkKind.Tv
-                        ? UIOrientation.LandscapeLeft   // TVs are landscape-native: correct splash from frame one
-                        : UIOrientation.Portrait;
-                    PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
+                    if (kind == ApkKind.Phone)
+                    {
+                        // The salesman APK owns both presenter layouts: portrait keeps the
+                        // existing phone canvas, while landscape activates the TV canvas.
+                        PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+                        PlayerSettings.allowedAutorotateToPortrait = true;
+                        PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+                        PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+                        PlayerSettings.allowedAutorotateToLandscapeRight = true;
+                    }
+                    else
+                    {
+                        PlayerSettings.defaultInterfaceOrientation = kind == ApkKind.Tv
+                            ? UIOrientation.LandscapeLeft
+                            : UIOrientation.Portrait; // the phone remote remains portrait-only
+                    }
+
+                    // TV: Vulkan first with OpenGL ES 3 as a broad hardware fallback.
+                    // Unity 6 supports GLES 3.0; an ARM APK translated by an x86 Android
+                    // emulator is not a reliable graphics-compatibility test.
+                    PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, kind == ApkKind.Tv
+                        ? new[] { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLES3 }
+                        : new[] { GraphicsDeviceType.OpenGLES3 });
 
                     // The Quest needs minSdk 32, but presenter hardware in the field is often
                     // older — Android 8 (API 26) keeps virtually every phone/panel installable.
                     PlayerSettings.Android.minSdkVersion = (AndroidSdkVersions)26;
 
+                    // Older phones and many TV/set-top boxes still expose a 32-bit userspace.
+                    // All non-XR APKs ship both ABIs so installation is not needlessly blocked.
+                    PlayerSettings.Android.targetArchitectures =
+                        AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+
                     if (kind == ApkKind.Tv)
                     {
-                        // Unknown TV hardware: many Android panels/set-top boxes are still
-                        // 32-bit. Shipping both ABIs costs APK size but never fails to install.
-                        PlayerSettings.Android.targetArchitectures =
-                            AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+                        // TV screen buffers are often single-sample (the Android TV emulator's
+                        // always is); URP then cannot open its 4x MSAA render pass and drops
+                        // every frame — the app runs but the screen stays black. Ship the TV
+                        // APK with MSAA off on every quality level; Quest keeps its 4x.
+                        foreach (RenderPipelineAsset asset in EnumeratePipelineAssets())
+                        {
+                            if (asset is UniversalRenderPipelineAsset urp && !savedMsaa.ContainsKey(urp))
+                            {
+                                savedMsaa[urp] = urp.msaaSampleCount;
+                                urp.msaaSampleCount = 1;
+                            }
+                        }
                     }
                 }
 
@@ -1458,13 +1626,14 @@ namespace Godrej.Editor
                 if (report.summary.result == BuildResult.Succeeded)
                 {
                     float sizeMb = report.summary.totalSize / (1024f * 1024f);
-                    EditorUtility.DisplayDialog("Godrej Build",
-                        $"{kind.ToString().ToUpperInvariant()} build succeeded ({sizeMb:F0} MB):\n{outputPath}", "OK");
+                    ReportBuildResult(
+                        $"{kind.ToString().ToUpperInvariant()} build succeeded ({sizeMb:F0} MB): {outputPath}");
                 }
                 else
                 {
-                    EditorUtility.DisplayDialog("Godrej Build",
-                        $"Build {report.summary.result}. Check the Console for details.", "OK");
+                    ReportBuildResult(
+                        $"{kind.ToString().ToUpperInvariant()} build {report.summary.result}. Check the Console for details.",
+                        error: true);
                 }
             }
             finally
@@ -1473,9 +1642,45 @@ namespace Godrej.Editor
                 xrManager.TrySetLoaders(savedLoaders);
                 androidXr.InitManagerOnStart = savedInitOnStart;
                 PlayerSettings.defaultInterfaceOrientation = savedOrientation;
+                PlayerSettings.allowedAutorotateToPortrait = savedAutoPortrait;
+                PlayerSettings.allowedAutorotateToPortraitUpsideDown = savedAutoPortraitUpsideDown;
+                PlayerSettings.allowedAutorotateToLandscapeLeft = savedAutoLandscapeLeft;
+                PlayerSettings.allowedAutorotateToLandscapeRight = savedAutoLandscapeRight;
                 PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, savedApis);
                 PlayerSettings.Android.minSdkVersion = savedMinSdk;
                 PlayerSettings.Android.targetArchitectures = savedArchitectures;
+                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, savedAppId);
+                PlayerSettings.productName = savedProductName;
+                foreach (KeyValuePair<UniversalRenderPipelineAsset, int> pair in savedMsaa)
+                    pair.Key.msaaSampleCount = pair.Value;
+
+                // BuildPlayer flushes dirty assets to disk mid-build, so the URP assets
+                // were written with the TV overrides; save again or the restored values
+                // exist only in memory and the next Quest build ships without MSAA.
+                if (savedMsaa.Count > 0) AssetDatabase.SaveAssets();
+            }
+        }
+
+        private static void ReportBuildResult(string message, bool error = false)
+        {
+            if (error) Debug.LogError($"[Godrej Build] {message}");
+            else Debug.Log($"[Godrej Build] {message}");
+
+            if (!Application.isBatchMode && !suppressBuildDialogs)
+                EditorUtility.DisplayDialog("Godrej Build", message, "OK");
+        }
+
+        /// <summary>Every render pipeline asset the built player can end up using:
+        /// the graphics default plus each quality level's override.</summary>
+        private static IEnumerable<RenderPipelineAsset> EnumeratePipelineAssets()
+        {
+            if (GraphicsSettings.defaultRenderPipeline != null)
+                yield return GraphicsSettings.defaultRenderPipeline;
+            for (int i = 0; i < QualitySettings.names.Length; i++)
+            {
+                RenderPipelineAsset asset = QualitySettings.GetRenderPipelineAssetAt(i);
+                if (asset != null)
+                    yield return asset;
             }
         }
 

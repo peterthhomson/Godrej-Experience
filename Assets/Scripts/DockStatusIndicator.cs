@@ -44,6 +44,7 @@ public sealed class DockStatusIndicator : MonoBehaviour
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnServerStarted += OnServerStarted;
+            NetworkManager.Singleton.OnServerStopped += OnServerStopped;
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
             NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
         }
@@ -63,6 +64,7 @@ public sealed class DockStatusIndicator : MonoBehaviour
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnServerStarted -= OnServerStarted;
+            NetworkManager.Singleton.OnServerStopped -= OnServerStopped;
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
             NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
         }
@@ -77,6 +79,14 @@ public sealed class DockStatusIndicator : MonoBehaviour
     private void OnServerStarted()
     {
         hosting = true;
+        RefreshHeadsetVisuals();
+    }
+
+    /// <summary>Deliberate stop (the START HOST toggle) or a full shutdown: back to idle.</summary>
+    private void OnServerStopped(bool wasHost)
+    {
+        hosting = false;
+        state = HeadsetState.NotConnected;
         RefreshHeadsetVisuals();
     }
 

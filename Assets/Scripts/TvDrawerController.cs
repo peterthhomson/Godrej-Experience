@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -33,6 +34,8 @@ public sealed class TvDrawerController : MonoBehaviour
     private bool open;
     private float velocity;
 
+    public bool IsOpen => open;
+
     private void Awake()
     {
         if (pullTab != null) pullTab.onClick.AddListener(Toggle);
@@ -65,6 +68,14 @@ public sealed class TvDrawerController : MonoBehaviour
             pos.y = TargetY();
             drawerPanel.anchoredPosition = pos;
             velocity = 0f;
+        }
+
+        // When the drawer is off-screen, keep D-pad focus on the one control that
+        // remains visible so OK/Enter always has a useful action.
+        if (!open && pullTab != null && EventSystem.current != null &&
+            pullTab.gameObject.activeInHierarchy)
+        {
+            pullTab.Select();
         }
     }
 
