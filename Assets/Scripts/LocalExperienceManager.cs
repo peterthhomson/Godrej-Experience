@@ -26,6 +26,16 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("Re-bake ambient lighting when the panorama changes. Expensive on Quest — leave OFF unless lit 3D objects share the scene.")]
     [SerializeField] private bool updateEnvironmentLighting = false;
 
+    [Header("Panorama Button Highlight")]
+    [Tooltip("Phone room buttons in the same order as panoramaMaterials.")]
+    [SerializeField] private Button[] phonePanoramaButtons;
+
+    [Tooltip("TV room buttons in the same order as panoramaMaterials.")]
+    [SerializeField] private Button[] tvPanoramaButtons;
+
+    [Tooltip("Background colour applied to the button for the active panorama.")]
+    [SerializeField] private Color activePanoramaButtonColor = new Color(0.784f, 0.647f, 0.341f, 1f);
+
     [Header("Floating Labels")]
     [Tooltip("Root object holding every world-space label. Toggled by the salesman.")]
     [SerializeField] private GameObject labelsRoot;
@@ -102,6 +112,9 @@ public class LocalExperienceManager : NetworkBehaviour
     private bool localBoardEnabled = true;
     private float localStartViewYaw;
 
+    private Color[] phonePanoramaButtonBaseColors;
+    private Color[] tvPanoramaButtonBaseColors;
+
     private static readonly int RotationProperty = Shader.PropertyToID("_Rotation");
 
     /// <summary>
@@ -121,6 +134,9 @@ public class LocalExperienceManager : NetworkBehaviour
 
     private void Awake()
     {
+        phonePanoramaButtonBaseColors = CachePanoramaButtonColors(phonePanoramaButtons);
+        tvPanoramaButtonBaseColors = CachePanoramaButtonColors(tvPanoramaButtons);
+
         if (previewCamera != null)
         {
             previewCameraTransform = previewCamera.transform;
@@ -397,6 +413,47 @@ public class LocalExperienceManager : NetworkBehaviour
         }
 
         ApplyLabelGroups(index);
+        ApplyPanoramaButtonHighlight(index);
+    }
+
+    private static Color[] CachePanoramaButtonColors(Button[] buttons)
+    {
+        if (buttons == null) return null;
+
+        var colors = new Color[buttons.Length];
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            colors[i] = button != null && button.targetGraphic != null
+                ? button.targetGraphic.color
+                : Color.white;
+        }
+
+        return colors;
+    }
+
+    private void ApplyPanoramaButtonHighlight(int activeIndex)
+    {
+        ApplyPanoramaButtonHighlight(phonePanoramaButtons, phonePanoramaButtonBaseColors, activeIndex);
+        ApplyPanoramaButtonHighlight(tvPanoramaButtons, tvPanoramaButtonBaseColors, activeIndex);
+    }
+
+    private void ApplyPanoramaButtonHighlight(Button[] buttons, Color[] baseColors, int activeIndex)
+    {
+        if (buttons == null || baseColors == null) return;
+
+        int count = Mathf.Min(buttons.Length, baseColors.Length);
+        for (int i = 0; i < count; i++)
+        {
+            Button button = buttons[i];
+            if (button == null || button.targetGraphic == null) continue;
+
+            Color color = i == activeIndex ? activePanoramaButtonColor : baseColors[i];
+            if (button.targetGraphic.color != color)
+            {
+                button.targetGraphic.color = color;
+            }
+        }
     }
 
     private void ApplyLabels(bool visible)
@@ -530,6 +587,18 @@ public class LocalExperienceManager : NetworkBehaviour
             panoramaMaterials != null && perPanoramaLabelGroups.Length != panoramaMaterials.Length)
         {
             Debug.LogWarning("[LocalExperienceManager] perPanoramaLabelGroups should match panoramaMaterials length (or be empty).", this);
+        }
+
+        ValidatePanoramaButtonCount(phonePanoramaButtons, "phonePanoramaButtons");
+        ValidatePanoramaButtonCount(tvPanoramaButtons, "tvPanoramaButtons");
+    }
+
+    private void ValidatePanoramaButtonCount(Button[] buttons, string fieldName)
+    {
+        if (buttons != null && buttons.Length > 0 && panoramaMaterials != null &&
+            buttons.Length != panoramaMaterials.Length)
+        {
+            Debug.LogWarning($"[LocalExperienceManager] {fieldName} should match panoramaMaterials length (or be empty).", this);
         }
     }
 }

@@ -283,6 +283,7 @@ namespace Godrej.Editor
             // ---- wire LocalExperienceManager ------------------------------------
             var expSO = new SerializedObject(experience);
             SetObjectArray(expSO, "panoramaMaterials", panoramas);
+            SetObjectArray(expSO, "phonePanoramaButtons", ui.roomButtons.ToArray());
             SetRef(expSO, "labelsRoot", labelsRoot);
             SetObjectArray(expSO, "perPanoramaLabelGroups", labelGroups);
             SetRef(expSO, "previewCamera", previewCamera);
@@ -1284,6 +1285,7 @@ namespace Godrej.Editor
             // ---- wire the managers ---------------------------------------------------
             var expSO = new SerializedObject(experience);
             SetRef(expSO, "tvPreviewImage", view);
+            SetObjectArray(expSO, "tvPanoramaButtons", roomButtons.ToArray());
             expSO.ApplyModifiedPropertiesWithoutUndo();
 
             SetRef(setupSO, "tvCanvas", canvasGO);
@@ -2079,7 +2081,10 @@ namespace Godrej.Editor
             return AssetDatabase.FindAssets("t:Material", new[] { MaterialFolder })
                 .Select(guid => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid)))
                 .Where(m => m != null)
-                .OrderBy(m => m.name)
+                // Material filenames carry the floor-plan sequence ("01 ..." through "14 ...").
+                // Sort by asset path so regenerating the scene preserves that intended order
+                // while each material's display name can remain clean for the room buttons.
+                .OrderBy(m => AssetDatabase.GetAssetPath(m))
                 .ToArray();
         }
 

@@ -204,7 +204,7 @@ GameObject:
   m_Component:
   - component: {fileID: 46827743}
   m_Layer: 0
-  m_Name: 03 Bedroom 03
+  m_Name: 04 Deck 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -914,7 +914,7 @@ GameObject:
   - component: {fileID: 76694974}
   - component: {fileID: 76694973}
   m_Layer: 0
-  m_Name: "Label \u2014 Master bedroom 01"
+  m_Name: "Label \u2014 Servant Room"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -959,7 +959,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MASTER BEDROOM
+  m_text: SERVANT ROOM
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1161,7 +1161,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: ' MB Dresser'
+  m_text: Bedroom 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1571,21 +1571,52 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LocalExperienceManager
   ShowTopMostFoldoutHeaderGroup: 1
   panoramaMaterials:
-  - {fileID: 2100000, guid: 6c8add086911a45448c4406dc4a3ac2a, type: 2}
-  - {fileID: 2100000, guid: 8698a243e6a86b84ebbc53681446cc58, type: 2}
-  - {fileID: 2100000, guid: 535a7b575d547f84aa6f69fa1d060461, type: 2}
-  - {fileID: 2100000, guid: aa12656a6ecc9b24d99354ebf972344a, type: 2}
   - {fileID: 2100000, guid: 3fba77adfec6fda4c9e6a416cc7ee6fb, type: 2}
-  - {fileID: 2100000, guid: 3617935cf1c80784dbee89d7d198114b, type: 2}
+  - {fileID: 2100000, guid: 6c8add086911a45448c4406dc4a3ac2a, type: 2}
   - {fileID: 2100000, guid: 1de0363a0cd6e6f41a8a8b10804a2c1e, type: 2}
-  - {fileID: 2100000, guid: 2d1e16d40e7cc374f839182f13ecaf0c, type: 2}
   - {fileID: 2100000, guid: e8538c2c19765e34cb71e55a8be1ce27, type: 2}
   - {fileID: 2100000, guid: bff1a12027e757342907f8b47c9d019e, type: 2}
-  - {fileID: 2100000, guid: 9235f1d83da2a3146a8c3e69fa31616d, type: 2}
+  - {fileID: 2100000, guid: 3617935cf1c80784dbee89d7d198114b, type: 2}
+  - {fileID: 2100000, guid: 1aaedaf9ea795a144b620005959bd1d6, type: 2}
+  - {fileID: 2100000, guid: 2d1e16d40e7cc374f839182f13ecaf0c, type: 2}
+  - {fileID: 2100000, guid: 535a7b575d547f84aa6f69fa1d060461, type: 2}
   - {fileID: 2100000, guid: f9ddaa4284ad83c46886f63291af4c69, type: 2}
   - {fileID: 2100000, guid: f7f083bba920c6149b120ba83a62de2f, type: 2}
-  - {fileID: 2100000, guid: 1aaedaf9ea795a144b620005959bd1d6, type: 2}
+  - {fileID: 2100000, guid: aa12656a6ecc9b24d99354ebf972344a, type: 2}
+  - {fileID: 2100000, guid: 9235f1d83da2a3146a8c3e69fa31616d, type: 2}
+  - {fileID: 2100000, guid: 8698a243e6a86b84ebbc53681446cc58, type: 2}
   updateEnvironmentLighting: 0
+  phonePanoramaButtons:
+  - {fileID: 730843222}
+  - {fileID: 525173152}
+  - {fileID: 234980479}
+  - {fileID: 177645547}
+  - {fileID: 1873698090}
+  - {fileID: 173219022}
+  - {fileID: 1109811548}
+  - {fileID: 526802301}
+  - {fileID: 844782095}
+  - {fileID: 1801623729}
+  - {fileID: 1423254745}
+  - {fileID: 1739533451}
+  - {fileID: 1242688084}
+  - {fileID: 1899225456}
+  tvPanoramaButtons:
+  - {fileID: 918704229}
+  - {fileID: 1524546476}
+  - {fileID: 392985223}
+  - {fileID: 55939792}
+  - {fileID: 106083576}
+  - {fileID: 961053410}
+  - {fileID: 47573031}
+  - {fileID: 1011138263}
+  - {fileID: 124242471}
+  - {fileID: 1970803436}
+  - {fileID: 207471761}
+  - {fileID: 80785097}
+  - {fileID: 1269336579}
+  - {fileID: 392967574}
+  activePanoramaButtonColor: {r: 0.784, g: 0.647, b: 0.341, a: 1}
   labelsRoot: {fileID: 1902989151}
   perPanoramaLabelGroups:
   - {fileID: 1076151828}
@@ -1732,7 +1763,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living 01
+  m_text: Utility
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2052,7 +2083,7 @@ GameObject:
   - component: {fileID: 108446416}
   - component: {fileID: 108446415}
   m_Layer: 0
-  m_Name: "Label \u2014 Living 01"
+  m_Name: "Label \u2014 Utility"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2097,7 +2128,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: LIVING ROOM
+  m_text: UTILITY
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3121,7 +3152,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Servant Room
+  m_text: Master Bedroom
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3830,7 +3861,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Master bedroom 01
+  m_text: Servant Room
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -4149,7 +4180,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living Balcony 02
+  m_text: Toilet
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -4754,7 +4785,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB 04 Dresser
+  m_text: Living / Dining
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -5485,7 +5516,7 @@ GameObject:
   - component: {fileID: 315323520}
   - component: {fileID: 315323519}
   m_Layer: 0
-  m_Name: "Label \u2014 4 BHK MB 04 Dresser"
+  m_Name: "Label \u2014 Living / Dining"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5530,7 +5561,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB DRESSER
+  m_text: LIVING / DINING
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -5732,7 +5763,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Foyer
+  m_text: Deck 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -6082,7 +6113,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living Balcony 01
+  m_text: Walk-In
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -6240,7 +6271,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB Dresser
+  m_text: Living / Dining
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -6720,7 +6751,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living Balcony 01
+  m_text: Walk-In
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -7797,7 +7828,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB
+  m_text: Foyer
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8854,7 +8885,7 @@ GameObject:
   m_Component:
   - component: {fileID: 572349839}
   m_Layer: 0
-  m_Name: 13 Uility
+  m_Name: 14 Deck 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8954,7 +8985,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Master bedroom 01
+  m_text: Servant Room
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -9467,7 +9498,7 @@ GameObject:
   - component: {fileID: 613419678}
   - component: {fileID: 613419677}
   m_Layer: 0
-  m_Name: "Label \u2014 Bedroom 03"
+  m_Name: "Label \u2014 Deck 1"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9512,7 +9543,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: BEDROOM
+  m_text: DECK 1
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -9646,7 +9677,7 @@ GameObject:
   m_Component:
   - component: {fileID: 614827066}
   m_Layer: 0
-  m_Name: 01 4 BHK MB 04 balcony
+  m_Name: 02 Bedroom 1 (Media Room)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9927,7 +9958,7 @@ GameObject:
   m_Component:
   - component: {fileID: 677341103}
   m_Layer: 0
-  m_Name: 07 Living 02
+  m_Name: 08 Bedroom 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -10165,7 +10196,7 @@ GameObject:
   m_Component:
   - component: {fileID: 718445078}
   m_Layer: 0
-  m_Name: 11 Master bedroom 01  Dresser Bath
+  m_Name: 12 Bedroom 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -11027,7 +11058,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB
+  m_text: Foyer
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -11742,7 +11773,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB  balcony
+  m_text: Bedroom 1
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -12082,7 +12113,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living 02
+  m_text: Bedroom 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -12746,7 +12777,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB 04 balcony
+  m_text: Bedroom 1
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -14087,7 +14118,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Master bedroom 01  Dresser Bath
+  m_text: Bedroom 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -14426,7 +14457,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Uility
+  m_text: Deck 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -14516,7 +14547,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1076151829}
   m_Layer: 0
-  m_Name: 00 4 BHK MB 04
+  m_Name: 01 Foyer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14891,7 +14922,7 @@ GameObject:
   - component: {fileID: 1094612217}
   - component: {fileID: 1094612216}
   m_Layer: 0
-  m_Name: "Label \u2014 Uility"
+  m_Name: "Label \u2014 Deck 3"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14936,7 +14967,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: UTILITY
+  m_text: DECK 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -15854,7 +15885,7 @@ GameObject:
   - component: {fileID: 1149067090}
   - component: {fileID: 1149067089}
   m_Layer: 0
-  m_Name: "Label \u2014 Living Balcony 01"
+  m_Name: "Label \u2014 Walk-In"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15899,7 +15930,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: LIVING ROOM BALCONY
+  m_text: WALK-IN
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -16614,7 +16645,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living Balcony 02
+  m_text: Toilet
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -17045,7 +17076,7 @@ GameObject:
   - component: {fileID: 1271706691}
   - component: {fileID: 1271706690}
   m_Layer: 0
-  m_Name: "Label \u2014 Servent room"
+  m_Name: "Label \u2014 Master Bedroom"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -17090,7 +17121,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: SERVANT ROOM
+  m_text: MASTER BEDROOM
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -17597,7 +17628,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living 02
+  m_text: Bedroom 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -18117,7 +18148,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1354767826}
   m_Layer: 0
-  m_Name: 12 Servent room
+  m_Name: 13 Master Bedroom
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18307,7 +18338,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1381263140}
   m_Layer: 0
-  m_Name: 09 Living Balcony 02
+  m_Name: 10 Toilet
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18902,7 +18933,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1424817774}
   m_Layer: 0
-  m_Name: 10 Master bedroom 01
+  m_Name: 11 Servant Room
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -19283,7 +19314,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1453290075}
   m_Layer: 0
-  m_Name: 02 4 BHK MB 04 Dresser
+  m_Name: 03 Living / Dining
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -19949,7 +19980,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Uility
+  m_text: Deck 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -20041,7 +20072,7 @@ GameObject:
   - component: {fileID: 1497595613}
   - component: {fileID: 1497595612}
   m_Layer: 0
-  m_Name: "Label \u2014 Living 02"
+  m_Name: "Label \u2014 Bedroom 2"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20086,7 +20117,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'LIVING ROOM VIEW 2 '
+  m_text: BEDROOM 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -20378,7 +20409,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1521734779}
   m_Layer: 0
-  m_Name: FOYER
+  m_Name: 05 Deck 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20765,7 +20796,7 @@ GameObject:
   - component: {fileID: 1580844298}
   - component: {fileID: 1580844297}
   m_Layer: 0
-  m_Name: "Label \u2014 Foyar"
+  m_Name: "Label \u2014 Deck 2"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20810,7 +20841,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: FOYER
+  m_text: DECK 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -21288,7 +21319,7 @@ GameObject:
   - component: {fileID: 1651198718}
   - component: {fileID: 1651198717}
   m_Layer: 0
-  m_Name: "Label \u2014 Master bedroom 01  Dresser Bath"
+  m_Name: "Label \u2014 Bedroom 3"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -21333,7 +21364,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: MASTER BEDROOM DRESSER/BATHROOM
+  m_text: BEDROOM 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -22967,7 +22998,7 @@ GameObject:
   - component: {fileID: 1827166876}
   - component: {fileID: 1827166875}
   m_Layer: 0
-  m_Name: "Label \u2014 Living Balcony 02"
+  m_Name: "Label \u2014 Toilet"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -23012,7 +23043,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: LIVING ROOM BALCONY VIEW 2
+  m_text: TOILET
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -23148,7 +23179,7 @@ GameObject:
   - component: {fileID: 1829004367}
   - component: {fileID: 1829004366}
   m_Layer: 0
-  m_Name: "Label \u2014 4 BHK MB 04"
+  m_Name: "Label \u2014 Foyer"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -23193,7 +23224,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MASTER BEDROOM
+  m_text: FOYER
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -23485,7 +23516,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1852379822}
   m_Layer: 0
-  m_Name: 05 Kitchen
+  m_Name: 06 Kitchen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -23999,7 +24030,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Servant Room
+  m_text: Master Bedroom
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -24603,7 +24634,7 @@ GameObject:
   - component: {fileID: 1929346755}
   - component: {fileID: 1929346754}
   m_Layer: 0
-  m_Name: "Label \u2014 4 BHK MB 04 balcony"
+  m_Name: "Label \u2014 Bedroom 1 (Media Room)"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -24648,7 +24679,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4 BHK MB BALCONY
+  m_text: 'BEDROOM 1 '
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -25333,7 +25364,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2001854012}
   m_Layer: 0
-  m_Name: 08 Living Balcony 01
+  m_Name: 09 Walk-In
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -25625,7 +25656,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Bedroom 03
+  m_text: Deck 1
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -25879,7 +25910,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Foyer
+  m_text: Deck 2
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -26037,7 +26068,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Bedroom 03
+  m_text: Deck 1
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -26353,7 +26384,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Living 01
+  m_text: Utility
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -26443,7 +26474,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2133816383}
   m_Layer: 0
-  m_Name: 06 Living 01
+  m_Name: 07 Utility
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
