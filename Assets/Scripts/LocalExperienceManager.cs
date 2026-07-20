@@ -1,5 +1,8 @@
+using System.Collections;
+using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 /// <summary>
@@ -26,6 +29,11 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("Re-bake ambient lighting when the panorama changes. Expensive on Quest — leave OFF unless lit 3D objects share the scene.")]
     [SerializeField] private bool updateEnvironmentLighting = false;
 
+    [Header("Panorama Transition")]
+    [Tooltip("Seconds used to crossfade from the current panorama to the next. Set to 0 for an immediate change.")]
+    [Min(0f)]
+    [SerializeField] private float panoramaTransitionDuration = 1f;
+
     [Header("Panorama Button Highlight")]
     [Tooltip("Phone room buttons in the same order as panoramaMaterials.")]
     [SerializeField] private Button[] phonePanoramaButtons;
@@ -36,11 +44,11 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("Background colour applied to the button for the active panorama.")]
     [SerializeField] private Color activePanoramaButtonColor = new Color(0.784f, 0.647f, 0.341f, 1f);
 
-    [Header("Floating Labels")]
-    [Tooltip("Root object holding every world-space label. Toggled by the salesman.")]
+    [Header("Panorama Label Images")]
+    [Tooltip("Root object holding every world-space label image. Toggled by the salesman.")]
     [SerializeField] private GameObject labelsRoot;
 
-    [Tooltip("Optional: one label group per panorama (same order as materials). Only the group matching the current panorama is shown. Leave empty to show all labels in every room.")]
+    [Tooltip("One image-label group per panorama, in material order. Only the current panorama's group is shown.")]
     [SerializeField] private GameObject[] perPanoramaLabelGroups;
 
     [Header("Floor Plan Board")]
@@ -71,6 +79,14 @@ public class LocalExperienceManager : NetworkBehaviour
     [Tooltip("How quickly the preview camera catches up to the received head rotation (1/s). 0 = snap instantly (shows network stepping).")]
     [Range(0f, 30f)]
     [SerializeField] private float previewSmoothing = 16f;
+
+    [Header("Desktop Testing — Mouse Look")]
+    [Tooltip("Allows desktop/editor testing without a headset. Left-drag over the panorama preview, or right-drag anywhere, to look around.")]
+    [SerializeField] private bool enableDesktopMouseLook = true;
+
+    [Tooltip("Degrees of camera rotation per mouse pixel while dragging.")]
+    [Range(0.02f, 1f)]
+    [SerializeField] private float desktopMouseSensitivity = 0.2f;
 
     [Header("Quest Head Tracking (Client only)")]
     [Tooltip("Transform of the XR Main Camera (the customer's head). Auto-resolves to Camera.main if left empty.")]
@@ -112,10 +128,54 @@ public class LocalExperienceManager : NetworkBehaviour
     private bool localBoardEnabled = true;
     private float localStartViewYaw;
 
+    // Play Mode starts from the exact material + individual image transforms authored
+    // in the scene. Runtime changes are always calculated from this immutable pair.
+    private float[] panoramaRotationBaselines;
+    private Transform[][] labelImageTransforms;
+    private Vector3[][] labelImagePositionBaselines;
+    private Quaternion[][] labelImageRotationBaselines;
+    private bool panoramaAlignmentBaselinesCaptured;
+
     private Color[] phonePanoramaButtonBaseColors;
     private Color[] tvPanoramaButtonBaseColors;
 
+    private Material panoramaBlendMaterial;
+    private Coroutine panoramaTransitionRoutine;
+    private int displayedPanoramaIndex = -1;
+    private int queuedPanoramaIndex = -1;
+    private int transitionTargetPanoramaIndex = -1;
+    private bool desktopMouseDragging;
+    private int desktopMouseButton = -1;
+    private float desktopMouseYaw;
+    private float desktopMousePitch;
+
     private static readonly int RotationProperty = Shader.PropertyToID("_Rotation");
+    private static readonly int TextureProperty = Shader.PropertyToID("_Tex");
+    private static readonly int TextureHdrProperty = Shader.PropertyToID("_Tex_HDR");
+    private static readonly int MainTextureProperty = Shader.PropertyToID("_MainTex");
+    private static readonly int MainTextureHdrProperty = Shader.PropertyToID("_MainTex_HDR");
+    private static readonly int LayoutProperty = Shader.PropertyToID("_Layout");
+    private static readonly int TintProperty = Shader.PropertyToID("_Tint");
+    private static readonly int ExposureProperty = Shader.PropertyToID("_Exposure");
+    private static readonly int BlendProperty = Shader.PropertyToID("_Blend");
+    private static readonly int CubeAProperty = Shader.PropertyToID("_CubeA");
+    private static readonly int CubeAHdrProperty = Shader.PropertyToID("_CubeA_HDR");
+    private static readonly int PanoAProperty = Shader.PropertyToID("_PanoA");
+    private static readonly int PanoAHdrProperty = Shader.PropertyToID("_PanoA_HDR");
+    private static readonly int ProjectionAProperty = Shader.PropertyToID("_ProjectionA");
+    private static readonly int LayoutAProperty = Shader.PropertyToID("_LayoutA");
+    private static readonly int TintAProperty = Shader.PropertyToID("_TintA");
+    private static readonly int ExposureAProperty = Shader.PropertyToID("_ExposureA");
+    private static readonly int RotationAProperty = Shader.PropertyToID("_RotationA");
+    private static readonly int CubeBProperty = Shader.PropertyToID("_CubeB");
+    private static readonly int CubeBHdrProperty = Shader.PropertyToID("_CubeB_HDR");
+    private static readonly int PanoBProperty = Shader.PropertyToID("_PanoB");
+    private static readonly int PanoBHdrProperty = Shader.PropertyToID("_PanoB_HDR");
+    private static readonly int ProjectionBProperty = Shader.PropertyToID("_ProjectionB");
+    private static readonly int LayoutBProperty = Shader.PropertyToID("_LayoutB");
+    private static readonly int TintBProperty = Shader.PropertyToID("_TintB");
+    private static readonly int ExposureBProperty = Shader.PropertyToID("_ExposureB");
+    private static readonly int RotationBProperty = Shader.PropertyToID("_RotationB");
 
     /// <summary>
     /// Set by NetworkSetup on the remote-control phone (baked mode "remote"): mirrors
@@ -134,6 +194,8 @@ public class LocalExperienceManager : NetworkBehaviour
 
     private void Awake()
     {
+        CapturePanoramaAlignmentBaselines();
+
         phonePanoramaButtonBaseColors = CachePanoramaButtonColors(phonePanoramaButtons);
         tvPanoramaButtonBaseColors = CachePanoramaButtonColors(tvPanoramaButtons);
 
@@ -141,9 +203,14 @@ public class LocalExperienceManager : NetworkBehaviour
         {
             previewCameraTransform = previewCamera.transform;
             previewTargetRotation = previewCameraTransform.rotation;
+            Vector3 previewEuler = previewCameraTransform.rotation.eulerAngles;
+            desktopMouseYaw = previewEuler.y;
+            desktopMousePitch = ToSignedAngle(previewEuler.x);
             previewCamera.fieldOfView = previewFieldOfView;
             previewCamera.clearFlags = CameraClearFlags.Skybox;
         }
+
+        RemoveLegacyPanoramaTextLabels();
 
         // Show the initial panorama, label, and board state before any network session exists.
         ApplyPanorama(localPanoramaIndex);
@@ -213,6 +280,20 @@ public class LocalExperienceManager : NetworkBehaviour
 
     public override void OnDestroy()
     {
+        RestorePanoramaAlignmentBaselines();
+
+        if (panoramaTransitionRoutine != null)
+        {
+            StopCoroutine(panoramaTransitionRoutine);
+            panoramaTransitionRoutine = null;
+        }
+
+        if (panoramaBlendMaterial != null)
+        {
+            Destroy(panoramaBlendMaterial);
+            panoramaBlendMaterial = null;
+        }
+
         if (previewTexture != null)
         {
             if (previewCamera != null) previewCamera.targetTexture = null;
@@ -226,6 +307,8 @@ public class LocalExperienceManager : NetworkBehaviour
 
     private void Update()
     {
+        UpdateDesktopMouseLook();
+
         // Quest client: stream head rotation to the host at a bounded rate.
         if (!IsSpawned || !IsClient || IsServer) return;
         if (xrHeadTransform == null) return;
@@ -239,6 +322,107 @@ public class LocalExperienceManager : NetworkBehaviour
         SubmitHeadRotationRpc(current);
         lastSentRotation = current;
         nextSendTime = now + 1f / rotationSendRate;
+    }
+
+    private void UpdateDesktopMouseLook()
+    {
+        if (!enableDesktopMouseLook || previewCameraTransform == null) return;
+        if (NetworkSetup.IsXrHeadsetDevice() || NetworkSetup.IsRemoteControl()) return;
+
+        Mouse mouse = Mouse.current;
+        if (mouse == null) return;
+
+        if (!desktopMouseDragging)
+        {
+            Vector2 pointerPosition = mouse.position.ReadValue();
+            if (mouse.leftButton.wasPressedThisFrame && IsPointerInsidePanoramaPreview(pointerPosition))
+            {
+                desktopMouseDragging = true;
+                desktopMouseButton = 0;
+            }
+            else if (mouse.rightButton.wasPressedThisFrame)
+            {
+                desktopMouseDragging = true;
+                desktopMouseButton = 1;
+            }
+        }
+
+        if (!desktopMouseDragging) return;
+
+        bool buttonHeld = desktopMouseButton == 0
+            ? mouse.leftButton.isPressed
+            : mouse.rightButton.isPressed;
+        if (!buttonHeld)
+        {
+            desktopMouseDragging = false;
+            desktopMouseButton = -1;
+            return;
+        }
+
+        Vector2 delta = mouse.delta.ReadValue();
+        if (delta.sqrMagnitude <= 0f) return;
+
+        desktopMouseYaw = Mathf.Repeat(
+            desktopMouseYaw + delta.x * desktopMouseSensitivity + 180f,
+            360f) - 180f;
+        desktopMousePitch = Mathf.Clamp(
+            desktopMousePitch - delta.y * desktopMouseSensitivity,
+            -80f,
+            80f);
+
+        previewTargetRotation = Quaternion.Euler(desktopMousePitch, desktopMouseYaw, 0f);
+        if (!IsServer)
+        {
+            previewCameraTransform.rotation = previewTargetRotation;
+        }
+    }
+
+    private bool IsPointerInsidePanoramaPreview(Vector2 screenPosition)
+    {
+        return IsPointerInsideRawImage(previewImage, screenPosition) ||
+               IsPointerInsideRawImage(tvPreviewImage, screenPosition);
+    }
+
+    private static bool IsPointerInsideRawImage(RawImage image, Vector2 screenPosition)
+    {
+        if (image == null || !image.isActiveAndEnabled) return false;
+
+        Canvas canvas = image.canvas;
+        Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+        return RectTransformUtility.RectangleContainsScreenPoint(
+            image.rectTransform,
+            screenPosition,
+            eventCamera);
+    }
+
+    private void RemoveLegacyPanoramaTextLabels()
+    {
+        if (labelsRoot == null) return;
+
+        TextMeshPro[] oldTexts = labelsRoot.GetComponentsInChildren<TextMeshPro>(true);
+        for (int i = 0; i < oldTexts.Length; i++)
+        {
+            TextMeshPro oldText = oldTexts[i];
+            if (oldText == null) continue;
+
+            oldText.enabled = false;
+            PanoramaDestinationLabel imageMarker = oldText.GetComponentInParent<PanoramaDestinationLabel>();
+            if (imageMarker != null && oldText.gameObject == imageMarker.gameObject)
+            {
+                Destroy(oldText);
+            }
+            else
+            {
+                Destroy(oldText.gameObject);
+            }
+        }
+    }
+
+    private static float ToSignedAngle(float degrees)
+    {
+        return degrees > 180f ? degrees - 360f : degrees;
     }
 
     private void LateUpdate()
@@ -272,6 +456,12 @@ public class LocalExperienceManager : NetworkBehaviour
         previewTargetRotation = headRotation;
     }
 
+    [Rpc(SendTo.Server)]
+    private void RequestPanoramaFromHotspotRpc(int index)
+    {
+        SetPanorama(index);
+    }
+
     // ---------------------------------------------------------------- salesman UI entry points
 
     /// <summary>
@@ -299,6 +489,31 @@ public class LocalExperienceManager : NetworkBehaviour
             localPanoramaIndex = index;
             ApplyPanorama(index);
         }
+    }
+
+    /// <summary>
+    /// Entry point for a destination label. The server still validates and owns the
+    /// panorama change, while a Quest client can request the same action by selecting
+    /// a label with its XR ray.
+    /// </summary>
+    public void SelectDestinationLabel(int index)
+    {
+        if (panoramaMaterials == null || index < 0 || index >= panoramaMaterials.Length) return;
+
+        if (!IsSpawned || IsServer)
+        {
+            SetPanorama(index);
+        }
+        else
+        {
+            RequestPanoramaFromHotspotRpc(index);
+        }
+    }
+
+    /// <summary>Room-name version used by manually placed destination labels.</summary>
+    public void SelectDestinationLabel(string roomName)
+    {
+        SelectDestinationLabel(FindPanoramaIndex(roomName));
     }
 
     /// <summary>
@@ -401,28 +616,214 @@ public class LocalExperienceManager : NetworkBehaviour
             return;
         }
 
-        // Both the Quest XR camera and the host preview camera clear with the skybox,
-        // so a single material swap updates every viewpoint at once.
-        RenderSettings.skybox = material;
-        Debug.Log($"[LocalExperienceManager] Panorama {index} applied: {material.name}");
-
         // Each room remembers its own start-view rotation (stored in the material).
         // The server pushes it into the synced state; the slider mirrors it silently.
         if (material.HasProperty(RotationProperty))
         {
             float roomYaw = material.GetFloat(RotationProperty);
+            ApplyLabelGroupStartView(index, roomYaw);
             if (IsSpawned && IsServer) startViewYaw.Value = roomYaw;
             else if (!IsSpawned) localStartViewYaw = roomYaw;
             if (startViewSlider != null) startViewSlider.SetValueWithoutNotify(roomYaw);
         }
+
+        ApplyPanoramaButtonHighlight(index);
+
+        if (displayedPanoramaIndex < 0 || displayedPanoramaIndex == index ||
+            panoramaTransitionDuration <= 0f || !CanCrossfade(material))
+        {
+            ApplyPanoramaImmediately(index, material);
+            return;
+        }
+
+        // Keep the currently visible pair stable if several room commands arrive close
+        // together. The latest request is queued and starts as soon as this blend ends.
+        if (panoramaTransitionRoutine != null)
+        {
+            queuedPanoramaIndex = index;
+            return;
+        }
+
+        Material source = panoramaMaterials[displayedPanoramaIndex];
+        if (!CanCrossfade(source) || !EnsurePanoramaBlendMaterial())
+        {
+            ApplyPanoramaImmediately(index, material);
+            return;
+        }
+
+        panoramaTransitionRoutine = StartCoroutine(CrossfadePanorama(
+            displayedPanoramaIndex, source, index, material));
+    }
+
+    private void ApplyPanoramaImmediately(int index, Material material)
+    {
+        if (panoramaTransitionRoutine != null)
+        {
+            StopCoroutine(panoramaTransitionRoutine);
+            panoramaTransitionRoutine = null;
+        }
+
+        queuedPanoramaIndex = -1;
+        transitionTargetPanoramaIndex = -1;
+        displayedPanoramaIndex = index;
+
+        // Both the Quest XR camera and the host preview camera clear with the skybox,
+        // so a single material assignment updates every local viewpoint.
+        RenderSettings.skybox = material;
+        ApplyLabelGroups(index);
 
         if (updateEnvironmentLighting)
         {
             DynamicGI.UpdateEnvironment();
         }
 
-        ApplyLabelGroups(index);
-        ApplyPanoramaButtonHighlight(index);
+        Debug.Log($"[LocalExperienceManager] Panorama {index} applied: {material.name}");
+    }
+
+    private IEnumerator CrossfadePanorama(
+        int sourceIndex, Material source, int targetIndex, Material target)
+    {
+        transitionTargetPanoramaIndex = targetIndex;
+        ConfigureBlendEndpoint(source, true);
+        ConfigureBlendEndpoint(target, false);
+        panoramaBlendMaterial.SetFloat(BlendProperty, 0f);
+
+        // Destination labels would otherwise float over both rooms during the blend.
+        ApplyLabelGroups(-1);
+        RenderSettings.skybox = panoramaBlendMaterial;
+
+        float elapsed = 0f;
+        while (elapsed < panoramaTransitionDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float normalized = Mathf.Clamp01(elapsed / panoramaTransitionDuration);
+            float eased = normalized * normalized * (3f - 2f * normalized);
+            panoramaBlendMaterial.SetFloat(BlendProperty, eased);
+            yield return null;
+        }
+
+        panoramaBlendMaterial.SetFloat(BlendProperty, 1f);
+        RenderSettings.skybox = target;
+        displayedPanoramaIndex = targetIndex;
+        transitionTargetPanoramaIndex = -1;
+        panoramaTransitionRoutine = null;
+        ApplyLabelGroups(targetIndex);
+
+        if (updateEnvironmentLighting)
+        {
+            DynamicGI.UpdateEnvironment();
+        }
+
+        Debug.Log($"[LocalExperienceManager] Panorama {sourceIndex} -> {targetIndex} crossfade complete: {target.name}");
+
+        int nextIndex = queuedPanoramaIndex;
+        queuedPanoramaIndex = -1;
+        if (nextIndex >= 0 && nextIndex != displayedPanoramaIndex &&
+            panoramaMaterials != null && nextIndex < panoramaMaterials.Length)
+        {
+            ApplyPanorama(nextIndex);
+        }
+    }
+
+    private bool EnsurePanoramaBlendMaterial()
+    {
+        if (panoramaBlendMaterial != null) return true;
+
+        Shader shader = Resources.Load<Shader>("GodrejPanoramaCrossfade");
+        if (shader == null)
+        {
+            shader = Shader.Find("Godrej/Skybox Panorama Crossfade");
+        }
+
+        if (shader == null)
+        {
+            Debug.LogWarning("[LocalExperienceManager] Panorama crossfade shader is missing; using immediate panorama changes.", this);
+            return false;
+        }
+
+        panoramaBlendMaterial = new Material(shader)
+        {
+            name = "Godrej Panorama Crossfade (Runtime)",
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        return true;
+    }
+
+    private static bool CanCrossfade(Material material)
+    {
+        if (material == null) return false;
+
+        return UsesPanoramaTexture(material) ||
+               (material.HasProperty(TextureProperty) &&
+                material.GetTexture(TextureProperty) is Cubemap);
+    }
+
+    /// <summary>
+    /// Skybox/Panoramic materials can retain a stale cubemap in _Tex even though Unity
+    /// renders _MainTex. Prefer the shader's real panoramic input so the blend endpoint
+    /// exactly matches the material assigned after the fade and cannot visibly snap.
+    /// </summary>
+    private static bool UsesPanoramaTexture(Material material)
+    {
+        if (material == null || !material.HasProperty(MainTextureProperty) ||
+            !(material.GetTexture(MainTextureProperty) is Texture2D))
+        {
+            return false;
+        }
+
+        string shaderName = material.shader != null ? material.shader.name : string.Empty;
+        bool isPanoramicShader = shaderName.IndexOf(
+            "Panoramic",
+            System.StringComparison.OrdinalIgnoreCase) >= 0;
+        bool hasUsableCubemap = material.HasProperty(TextureProperty) &&
+                               material.GetTexture(TextureProperty) is Cubemap;
+        return isPanoramicShader || !hasUsableCubemap;
+    }
+
+    private void ConfigureBlendEndpoint(Material source, bool endpointA)
+    {
+        int cube = endpointA ? CubeAProperty : CubeBProperty;
+        int cubeHdr = endpointA ? CubeAHdrProperty : CubeBHdrProperty;
+        int pano = endpointA ? PanoAProperty : PanoBProperty;
+        int panoHdr = endpointA ? PanoAHdrProperty : PanoBHdrProperty;
+        int projection = endpointA ? ProjectionAProperty : ProjectionBProperty;
+        int layout = endpointA ? LayoutAProperty : LayoutBProperty;
+        int tint = endpointA ? TintAProperty : TintBProperty;
+        int exposure = endpointA ? ExposureAProperty : ExposureBProperty;
+        int rotation = endpointA ? RotationAProperty : RotationBProperty;
+
+        bool usesPanorama = UsesPanoramaTexture(source);
+        bool usesCubemap = !usesPanorama && source.HasProperty(TextureProperty) &&
+                           source.GetTexture(TextureProperty) is Cubemap;
+        panoramaBlendMaterial.SetFloat(projection, usesCubemap ? 0f : 1f);
+
+        if (usesCubemap)
+        {
+            panoramaBlendMaterial.SetTexture(cube, source.GetTexture(TextureProperty));
+            panoramaBlendMaterial.SetVector(cubeHdr, source.HasProperty(TextureHdrProperty)
+                ? source.GetVector(TextureHdrProperty)
+                : new Vector4(1f, 1f, 0f, 1f));
+        }
+        else
+        {
+            panoramaBlendMaterial.SetTexture(pano, source.GetTexture(MainTextureProperty));
+            panoramaBlendMaterial.SetVector(panoHdr, source.HasProperty(MainTextureHdrProperty)
+                ? source.GetVector(MainTextureHdrProperty)
+                : new Vector4(1f, 1f, 0f, 1f));
+            panoramaBlendMaterial.SetFloat(layout, source.HasProperty(LayoutProperty)
+                ? source.GetFloat(LayoutProperty)
+                : 0f);
+        }
+
+        panoramaBlendMaterial.SetColor(tint, source.HasProperty(TintProperty)
+            ? source.GetColor(TintProperty)
+            : Color.white);
+        panoramaBlendMaterial.SetFloat(exposure, source.HasProperty(ExposureProperty)
+            ? source.GetFloat(ExposureProperty)
+            : 1f);
+        panoramaBlendMaterial.SetFloat(rotation, source.HasProperty(RotationProperty)
+            ? source.GetFloat(RotationProperty)
+            : 0f);
     }
 
     private static Color[] CachePanoramaButtonColors(Button[] buttons)
@@ -484,10 +885,117 @@ public class LocalExperienceManager : NetworkBehaviour
     /// <summary>Spins the active skybox so the given yaw faces the customer's front.</summary>
     private void ApplyStartView(float degrees)
     {
-        Material sky = RenderSettings.skybox;
-        if (sky != null && sky.HasProperty(RotationProperty))
+        int activeIndex = CurrentPanorama;
+        Material active = panoramaMaterials != null && activeIndex >= 0 && activeIndex < panoramaMaterials.Length
+            ? panoramaMaterials[activeIndex]
+            : null;
+
+        if (active != null && active.HasProperty(RotationProperty))
         {
-            sky.SetFloat(RotationProperty, degrees);
+            active.SetFloat(RotationProperty, degrees);
+            ApplyLabelGroupStartView(activeIndex, degrees);
+        }
+
+        if (panoramaBlendMaterial != null && transitionTargetPanoramaIndex == activeIndex)
+        {
+            panoramaBlendMaterial.SetFloat(RotationBProperty, degrees);
+        }
+    }
+
+    /// <summary>
+    /// Captures the authored material rotation and image transforms as one immutable
+    /// Play Mode baseline. This prevents networking/startup events from applying the
+    /// same angular correction twice.
+    /// </summary>
+    private void CapturePanoramaAlignmentBaselines()
+    {
+        int count = panoramaMaterials != null ? panoramaMaterials.Length : 0;
+        panoramaRotationBaselines = new float[count];
+        labelImageTransforms = new Transform[count][];
+        labelImagePositionBaselines = new Vector3[count][];
+        labelImageRotationBaselines = new Quaternion[count][];
+
+        for (int i = 0; i < count; i++)
+        {
+            Material material = panoramaMaterials[i];
+            panoramaRotationBaselines[i] = material != null && material.HasProperty(RotationProperty)
+                ? material.GetFloat(RotationProperty)
+                : 0f;
+
+            GameObject group = perPanoramaLabelGroups != null && i < perPanoramaLabelGroups.Length
+                ? perPanoramaLabelGroups[i]
+                : null;
+            int childCount = group != null ? group.transform.childCount : 0;
+            labelImageTransforms[i] = new Transform[childCount];
+            labelImagePositionBaselines[i] = new Vector3[childCount];
+            labelImageRotationBaselines[i] = new Quaternion[childCount];
+
+            for (int childIndex = 0; childIndex < childCount; childIndex++)
+            {
+                Transform image = group.transform.GetChild(childIndex);
+                labelImageTransforms[i][childIndex] = image;
+                labelImagePositionBaselines[i][childIndex] = image.position;
+                labelImageRotationBaselines[i][childIndex] = image.rotation;
+            }
+        }
+
+        panoramaAlignmentBaselinesCaptured = true;
+    }
+
+    /// <summary>Places each image absolutely for the requested panorama view.</summary>
+    private void ApplyLabelGroupStartView(int index, float degrees)
+    {
+        if (!panoramaAlignmentBaselinesCaptured) CapturePanoramaAlignmentBaselines();
+        if (perPanoramaLabelGroups == null || index < 0 ||
+            index >= perPanoramaLabelGroups.Length || index >= panoramaRotationBaselines.Length)
+        {
+            return;
+        }
+
+        if (labelImageTransforms[index] == null) return;
+
+        float rotationDelta = Mathf.DeltaAngle(panoramaRotationBaselines[index], degrees);
+        Quaternion adjustment = Quaternion.AngleAxis(-rotationDelta, Vector3.up);
+
+        Vector3 viewerPosition = labelsRoot != null
+            ? labelsRoot.transform.position
+            : Vector3.zero;
+        for (int childIndex = 0; childIndex < labelImageTransforms[index].Length; childIndex++)
+        {
+            Transform image = labelImageTransforms[index][childIndex];
+            if (image == null) continue;
+
+            Vector3 baselineOffset = labelImagePositionBaselines[index][childIndex] - viewerPosition;
+            image.SetPositionAndRotation(
+                viewerPosition + adjustment * baselineOffset,
+                adjustment * labelImageRotationBaselines[index][childIndex]);
+        }
+    }
+
+    /// <summary>Prevents Play Mode changes leaking into the next editor test.</summary>
+    private void RestorePanoramaAlignmentBaselines()
+    {
+        if (!panoramaAlignmentBaselinesCaptured) return;
+
+        for (int i = 0; i < panoramaRotationBaselines.Length; i++)
+        {
+            Material material = panoramaMaterials != null && i < panoramaMaterials.Length
+                ? panoramaMaterials[i]
+                : null;
+            if (material != null && material.HasProperty(RotationProperty))
+            {
+                material.SetFloat(RotationProperty, panoramaRotationBaselines[i]);
+            }
+
+            if (labelImageTransforms[i] == null) continue;
+            for (int childIndex = 0; childIndex < labelImageTransforms[i].Length; childIndex++)
+            {
+                Transform image = labelImageTransforms[i][childIndex];
+                if (image == null) continue;
+                image.SetPositionAndRotation(
+                    labelImagePositionBaselines[i][childIndex],
+                    labelImageRotationBaselines[i][childIndex]);
+            }
         }
     }
 
@@ -507,6 +1015,22 @@ public class LocalExperienceManager : NetworkBehaviour
                 group.SetActive(shouldBeActive);
             }
         }
+    }
+
+    /// <summary>Finds a panorama by display name so labels survive array reordering.</summary>
+    public int FindPanoramaIndex(string roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName) || panoramaMaterials == null) return -1;
+
+        for (int i = 0; i < panoramaMaterials.Length; i++)
+        {
+            if (string.Equals(GetPanoramaName(i), roomName.Trim(), System.StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>

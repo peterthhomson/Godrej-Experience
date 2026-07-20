@@ -1904,28 +1904,10 @@ namespace Godrej.Editor
                 group.transform.SetParent(root.transform, false);
                 labelGroups[i] = group;
 
-                // One starter label per room (the room's name) — reposition/duplicate freely.
-                CreateWorldLabel(group.transform, roomName, new Vector3(0f, 1.9f, 2.6f));
-
                 group.SetActive(i == 0);
             }
 
             return root;
-        }
-
-        private static void CreateWorldLabel(Transform parent, string text, Vector3 position)
-        {
-            var labelGO = new GameObject($"Label — {text}");
-            labelGO.transform.SetParent(parent, false);
-            labelGO.transform.localPosition = position;
-            labelGO.transform.rotation = Quaternion.LookRotation(new Vector3(position.x, 0f, position.z).normalized);
-
-            var tmp = labelGO.AddComponent<TextMeshPro>();
-            tmp.text = text;
-            tmp.fontSize = 2.2f;
-            tmp.color = Color.white;
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.rectTransform.sizeDelta = new Vector2(3f, 0.7f);
         }
 
         // =====================================================================
