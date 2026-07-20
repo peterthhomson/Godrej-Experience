@@ -1161,7 +1161,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Bedroom 3
+  m_text: Master Bedroom
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1580,10 +1580,10 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 1aaedaf9ea795a144b620005959bd1d6, type: 2}
   - {fileID: 2100000, guid: 2d1e16d40e7cc374f839182f13ecaf0c, type: 2}
   - {fileID: 2100000, guid: 535a7b575d547f84aa6f69fa1d060461, type: 2}
-  - {fileID: 2100000, guid: f9ddaa4284ad83c46886f63291af4c69, type: 2}
   - {fileID: 2100000, guid: f7f083bba920c6149b120ba83a62de2f, type: 2}
   - {fileID: 2100000, guid: aa12656a6ecc9b24d99354ebf972344a, type: 2}
   - {fileID: 2100000, guid: 9235f1d83da2a3146a8c3e69fa31616d, type: 2}
+  - {fileID: 2100000, guid: f9ddaa4284ad83c46886f63291af4c69, type: 2}
   - {fileID: 2100000, guid: 8698a243e6a86b84ebbc53681446cc58, type: 2}
   updateEnvironmentLighting: 0
   phonePanoramaButtons:
@@ -1628,10 +1628,10 @@ MonoBehaviour:
   - {fileID: 2133816382}
   - {fileID: 677341102}
   - {fileID: 2001854011}
-  - {fileID: 1381263139}
   - {fileID: 1424817773}
   - {fileID: 718445077}
   - {fileID: 1354767825}
+  - {fileID: 1381263139}
   - {fileID: 572349838}
   floorPlanBoard: {fileID: 418410128}
   startViewSlider: {fileID: 63495923}
@@ -3152,7 +3152,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Master Bedroom
+  m_text: Toilet
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3861,7 +3861,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Servant Room
+  m_text: Bedroom 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -4180,7 +4180,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Toilet
+  m_text: Servant Room
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8985,7 +8985,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Servant Room
+  m_text: Bedroom 3
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -10196,7 +10196,7 @@ GameObject:
   m_Component:
   - component: {fileID: 718445078}
   m_Layer: 0
-  m_Name: 12 Bedroom 3
+  m_Name: 11 Bedroom 3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14118,7 +14118,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Bedroom 3
+  m_text: Master Bedroom
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -16645,7 +16645,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Toilet
+  m_text: Servant Room
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -18148,7 +18148,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1354767826}
   m_Layer: 0
-  m_Name: 13 Master Bedroom
+  m_Name: 12 Master Bedroom
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18338,7 +18338,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1381263140}
   m_Layer: 0
-  m_Name: 10 Toilet
+  m_Name: 13 Toilet
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18933,7 +18933,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1424817774}
   m_Layer: 0
-  m_Name: 11 Servant Room
+  m_Name: 10 Servant Room
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -24030,7 +24030,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Master Bedroom
+  m_text: Toilet
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}

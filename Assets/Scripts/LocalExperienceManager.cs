@@ -362,12 +362,21 @@ public class LocalExperienceManager : NetworkBehaviour
         }
     }
 
-    /// <summary>Room display name for UI generation (material name).</summary>
+    /// <summary>Room display name for UI generation, without the numeric sort prefix.</summary>
     public string GetPanoramaName(int index)
     {
         if (panoramaMaterials == null || index < 0 || index >= panoramaMaterials.Length) return string.Empty;
         Material m = panoramaMaterials[index];
-        return m != null ? m.name : string.Empty;
+        if (m == null) return string.Empty;
+
+        string name = m.name.Trim();
+        if (name.Length > 3 && char.IsDigit(name[0]) && char.IsDigit(name[1]) &&
+            (name[2] == ' ' || name[2] == '-' || name[2] == '_'))
+        {
+            name = name.Substring(3).Trim();
+        }
+
+        return name;
     }
 
     // ---------------------------------------------------------------- state application

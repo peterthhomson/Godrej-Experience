@@ -504,7 +504,7 @@ namespace Godrej.Editor
 
             for (int i = 0; i < panoramas.Length; i++)
             {
-                string label = panoramas[i] != null ? panoramas[i].name : $"Room {i + 1}";
+                string label = GetRoomDisplayName(panoramas[i], i);
                 roomButtons.Add(CreateRoomButton(gridPanel.transform, $"Room {i:00}", label));
             }
         }
@@ -1899,8 +1899,8 @@ namespace Godrej.Editor
 
             for (int i = 0; i < panoramas.Length; i++)
             {
-                string roomName = panoramas[i] != null ? panoramas[i].name : $"Room {i + 1}";
-                var group = new GameObject($"{i:00} {roomName}");
+                string roomName = GetRoomDisplayName(panoramas[i], i);
+                var group = new GameObject($"{i + 1:00} {roomName}");
                 group.transform.SetParent(root.transform, false);
                 labelGroups[i] = group;
 
@@ -2073,6 +2073,20 @@ namespace Godrej.Editor
         // =====================================================================
         //  HELPERS
         // =====================================================================
+
+        private static string GetRoomDisplayName(Material material, int index)
+        {
+            if (material == null) return $"Room {index + 1}";
+
+            string name = material.name.Trim();
+            if (name.Length > 3 && char.IsDigit(name[0]) && char.IsDigit(name[1]) &&
+                (name[2] == ' ' || name[2] == '-' || name[2] == '_'))
+            {
+                name = name.Substring(3).Trim();
+            }
+
+            return string.IsNullOrEmpty(name) ? $"Room {index + 1}" : name;
+        }
 
         private static Material[] LoadPanoramaMaterials()
         {
